@@ -3,6 +3,8 @@ $ErrorActionPreference = "Stop"
 $WSL = "wsl.exe"
 $LMS_DIR = "/opt/frappe-lms"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sharedDir = Join-Path $scriptDir "..\shared"
+if (!(Test-Path $sharedDir)) { $sharedDir = Join-Path $scriptDir "shared" }
 
 # Read config from wizard (or use defaults)
 $conf = @{ SITE_NAME="lms.local"; ADMIN_EMAIL="admin@example.com"; ADMIN_PASSWORD="admin"; LMS_PORT="8000" }
@@ -26,33 +28,14 @@ if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
     Write-Host "On VMs: ensure nested virtualization is enabled."
 }
 
-# Step 1: WSL memory config
-Write-Host "Configuring WSL memory..."
-@("[wsl2]","memory=12GB","swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
+# Step 1: WSL2 + Ubuntu + Podman (shared across all Frappe apps)
+Write-Host "Setting up WSL2 + Podman..."
+& "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
 
-# Step 2: Ensure Ubuntu is installed in WSL
-Write-Host "Checking WSL Ubuntu..."
-$distros = & $WSL -l -q 2>&1 | Out-String
-if ($distros -notmatch "Ubuntu") {
-    Write-Host "Installing Ubuntu (this may take a few minutes)..."
-    & $WSL --install Ubuntu --no-launch
-    $ubuntuExe = (Get-AppxPackage *Ubuntu*).InstallLocation + "\ubuntu.exe"
-    if (Test-Path $ubuntuExe) { & $ubuntuExe install --root }
-}
-
-# Step 3: Ensure podman is installed
-Write-Host "Checking podman..."
-$podmanCheck = & $WSL -u root -- which podman 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Installing podman and podman-compose..."
-    & $WSL -u root -- bash -c "apt-get update && apt-get install -y podman podman-compose > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [\"docker.io\"]' >> /etc/containers/registries.conf"
-}
-
-# Step 4: Copy docker config into WSL
+# Step 2: Copy docker config into WSL
 Write-Host "Setting up LMS in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $LMS_DIR"
-$dockerDir = Join-Path $scriptDir "..\docker"
-if (!(Test-Path $dockerDir)) { $dockerDir = Join-Path $scriptDir "docker" }
+$dockerDir = Join-Path $scriptDir "docker"
 if (Test-Path $dockerDir) {
     $wslPath = (& $WSL -u root -- wslpath -a ($dockerDir -replace '\\','/')).Trim()
     & $WSL -u root -- bash -c "cp -r $wslPath/* $LMS_DIR/"
@@ -60,23 +43,18 @@ if (Test-Path $dockerDir) {
 # Ensure dependencies (payments) are resolved when fetching lms
 & $WSL -u root -- bash -c "sed -i 's/bench get-app lms/bench get-app --resolve-deps lms/' $LMS_DIR/init.sh"
 
-# Step 5: Register scheduled task (runs at boot as current user, no password needed)
-# S4U logon type uses service-for-user Kerberos — no stored credentials required
+# Step 3: Register startup task (shared S4U scheduled task)
 Write-Host "Registering startup task..."
-$action = New-ScheduledTaskAction -Execute "powershell" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptDir\lms-service.ps1`""
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType S4U
-Register-ScheduledTask -TaskName "FrappeLMS" -Action $action -Trigger $trigger -Principal $principal -Force
-Start-ScheduledTask -TaskName "FrappeLMS"
+& "$sharedDir\service-setup.ps1" -TaskName "FrappeLMS" -ServiceScript "$scriptDir\lms-service.ps1"
 
-# Step 6: Disable sleep mode
+# Step 4: Disable sleep mode
 Write-Host "Disabling sleep mode..."
 powercfg /change standby-timeout-ac 0
 powercfg /change standby-timeout-dc 0
 powercfg /change hibernate-timeout-ac 0
 powercfg /change hibernate-timeout-dc 0
 
-# Step 7: Firewall rule (port proxy is handled by lms-service.ps1 on every boot)
+# Step 5: Firewall rule (port proxy is handled by lms-service.ps1 on every boot)
 netsh advfirewall firewall add rule name="Frappe-LMS" dir=in action=allow protocol=TCP localport=$($conf.LMS_PORT)
 
 Write-Host ""

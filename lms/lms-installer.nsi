@@ -72,6 +72,12 @@ Section "Install"
     File "uninstall.ps1"
     File "update-portproxy.ps1"
 
+    ; Shared scripts
+    SetOutPath "$INSTDIR\shared"
+    File "..\shared\wsl-setup.ps1"
+    File "..\shared\service-setup.ps1"
+    SetOutPath $INSTDIR
+
     ; Copy docker-compose config
     SetOutPath "$INSTDIR\docker"
     File "..\docker\docker-compose.yml"
