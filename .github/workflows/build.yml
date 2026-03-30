@@ -1,0 +1,47 @@
+# Build Windows installers for Frappe apps
+name: Build Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Frappe app'
+        required: true
+        type: choice
+        options:
+          - lms
+      variant:
+        description: 'Installer variant'
+        required: true
+        default: 'lite'
+        type: choice
+        options:
+          - lite
+          - full
+  push:
+    paths:
+      - 'lms/**'
+      - 'shared/**'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      APP: ${{ inputs.app || 'lms' }}
+      VARIANT: ${{ inputs.variant || 'lite' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build ${{ env.APP }} ${{ env.VARIANT }} installer
+        run: powershell -ExecutionPolicy Bypass -File ${{ env.APP }}/build-installer.ps1 -Variant ${{ env.VARIANT }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-${{ env.APP }}-${{ env.VARIANT }}
+          path: ${{ env.APP }}/frappe-${{ env.APP }}-${{ env.VARIANT }}.exe

@@ -1,0 +1,5 @@
+*.exe
+*.tar
+*.msi
+*.appx
+bundle/
