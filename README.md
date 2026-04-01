@@ -56,3 +56,4 @@ ikuku is a distribution channel for Frappe apps, not a fork. We depend on and co
 - Hardware virtualization enabled (for WSL2)
 - 16 GB RAM recommended
 - Admin rights for install
+
