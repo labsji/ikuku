@@ -11,7 +11,7 @@ Each Frappe app gets a Windows installer that takes you from zero to running in 
 | App | Status | Installer |
 |-----|--------|-----------|
 | [Frappe LMS](lms/) | ✅ Tested | `frappe-lms-lite.exe` |
-| Frappe ERPNext | 🔜 Planned | `frappe-erpnext-lite.exe` |
+| [Frappe ERPNext](erpnext/) | 🔧 Scaffolded | `frappe-erpnext-lite.exe` |
 | Frappe CRM | 🔜 Planned | `frappe-crm-lite.exe` |
 | Frappe Helpdesk | 🔜 Planned | `frappe-helpdesk-lite.exe` |
 

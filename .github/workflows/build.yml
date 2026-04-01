@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - lms
+          - erpnext
       variant:
         description: 'Installer variant'
         required: true
