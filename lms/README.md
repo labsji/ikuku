@@ -51,7 +51,7 @@ That's it. Frappe LMS is running as a Windows service — survives reboots, acce
 
 - Local: `http://lms.localhost:8000/lms`
 - LAN: `http://<machine-name>:8000/lms`
-- Admin: `http://lms.localhost:8000` (Frappe desk)
+- Admin login: `http://lms.localhost:8000` → `Administrator` / `admin`
 
 ## Scripts
 

@@ -10,9 +10,10 @@ One-click Windows installer for [Frappe ERPNext](https://github.com/frappe/erpne
 
 ## Access
 
-- Local: `http://erp.localhost:8000/app`
-- LAN: `http://<machine-name>:8000/app`
-- Admin: username `Administrator`, password `admin`
+- Local: `http://erp.localhost:8000`
+- LAN: `http://<machine-name>:8000`
+- Login: `Administrator` / `admin`
+- After login, the Setup Wizard walks you through company, currency, and chart of accounts
 
 ## Requirements
 

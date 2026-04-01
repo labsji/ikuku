@@ -59,8 +59,10 @@ netsh advfirewall firewall add rule name="Frappe-ERPNext" dir=in action=allow pr
 
 Write-Host ""
 Write-Host "=== Frappe ERPNext installed! ===" -ForegroundColor Green
-Write-Host "Access at: http://erp.localhost:$($conf.LMS_PORT)/app"
-Write-Host "Or from LAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)/app"
+Write-Host "Access at: http://erp.localhost:$($conf.LMS_PORT)"
+Write-Host "Or from LAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)"
+Write-Host "Login: Administrator / admin"
+Write-Host "The Setup Wizard will guide you through initial configuration."
 Write-Host ""
 Write-Host "Task: FrappeERPNext (auto-starts on boot, keeps WSL alive)"
 Write-Host "Sleep mode: disabled"
