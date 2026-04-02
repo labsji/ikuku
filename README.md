@@ -67,3 +67,7 @@ powershell -File uninstall.ps1
 ## Community
 
 ikuku is a distribution channel for Frappe apps, not a fork. We depend on and contribute to the [Frappe ecosystem](https://github.com/frappe).
+
+## Credits
+
+Co-created with [Kiro](https://kiro.dev) — from architecture decisions to NSIS wizards to CI pipelines, every line was pair-programmed in `kiro-cli`.
