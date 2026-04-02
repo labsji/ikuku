@@ -11,6 +11,7 @@ on:
         options:
           - lms
           - erpnext
+          - Wiki
       variant:
         description: 'Installer variant'
         required: true
