@@ -22,6 +22,7 @@ Var WikiCheck
 Var LmsCheck
 Var ErpNextCheck
 Var CrmCheck
+Var CustomApp
 Var SelectedApps
 
 Function AppsPage
@@ -43,7 +44,11 @@ Function AppsPage
     ${NSD_CreateCheckbox} 20u 90u 200u 12u "CRM — customer relationship management"
     Pop $CrmCheck
 
-    ${NSD_CreateLabel} 0 115u 100% 12u "All apps accessible at http://localhost:8000"
+    ${NSD_CreateLabel} 0 115u 100% 12u "Custom Frappe app (GitHub URL or name):"
+    ${NSD_CreateText} 20u 130u 350u 12u ""
+    Pop $CustomApp
+
+    ${NSD_CreateLabel} 0 155u 100% 12u "All apps accessible at http://localhost:8000"
 
     nsDialogs::Show
 FunctionEnd
@@ -76,6 +81,15 @@ Function AppsPageLeave
             StrCpy $SelectedApps "$SelectedApps,crm"
         ${Else}
             StrCpy $SelectedApps "crm"
+        ${EndIf}
+    ${EndIf}
+    ; Custom app (URL or name)
+    ${NSD_GetText} $CustomApp $0
+    ${If} $0 != ""
+        ${If} $SelectedApps != ""
+            StrCpy $SelectedApps "$SelectedApps,$0"
+        ${Else}
+            StrCpy $SelectedApps "$0"
         ${EndIf}
     ${EndIf}
     ${If} $SelectedApps == ""
