@@ -4,25 +4,30 @@ Frappe apps on Windows — a better experience than Linux.
 
 > *ikuku* (Igbo: breeze) — open Windows and let the breeze in.
 
-Each Frappe app gets a Windows installer that takes you from zero to running in minutes. No Docker Desktop, no Linux VM, no manual setup. Goes beyond evaluation — stops just short of production.
+One installer, one port, pick your apps. No Docker Desktop, no Linux VM, no manual setup.
+
+## Quick Start
+
+1. Download `ikuku-lite.exe` from [Releases](../../releases)
+2. Run the installer — check the apps you want:
+
+   ☑ Wiki · ☐ LMS · ☐ ERPNext · ☐ CRM
+
+3. Open `http://localhost:8000`
+4. Login: `Administrator` / `admin`
+
+All selected apps share one bench, one port, one site.
 
 ## Apps
 
-| App | Status | Installer |
-|-----|--------|-----------|
-| [Frappe LMS](lms/) | ✅ Tested | `frappe-lms-lite.exe` |
-| [Frappe ERPNext](erpnext/) | 🔧 Scaffolded | `frappe-erpnext-lite.exe` |
-| [Frappe Wiki](Wiki/) | 🔧 Scaffolded | `frappe-wiki-lite.exe` |
-| Frappe CRM | 🔜 Planned | `frappe-crm-lite.exe` |
-| Frappe Helpdesk | 🔜 Planned | `frappe-helpdesk-lite.exe` |
+| App | Route | What it does |
+|-----|-------|-------------|
+| Wiki | `/wiki/` | Documentation & knowledge base with approval workflows |
+| LMS | `/lms` | Learning management system |
+| ERPNext | `/app` | Enterprise resource planning |
+| CRM | `/crm` | Customer relationship management |
 
 ## How it works
-
-Every installer uses the same stack:
-- **WSL2 Ubuntu** — real Linux inside Windows
-- **Podman** — Docker-compatible, no Docker Desktop license
-- **Scheduled task (S4U)** — survives reboot, no stored passwords
-- **Port proxy** — LAN accessible from any machine
 
 ```
 ┌─────────────────────────────────────────┐
@@ -30,26 +35,27 @@ Every installer uses the same stack:
 │  ┌─────────────────────────────────┐    │
 │  │  WSL2 Ubuntu + Podman           │    │
 │  │  ┌───────────────────────┐      │    │
-│  │  │  Frappe App (:8000)   │      │    │
+│  │  │  Frappe Bench (:8000) │      │    │
+│  │  │  Wiki · LMS · ERPNext │      │    │
 │  │  │  MariaDB · Redis      │      │    │
 │  │  └───────────────────────┘      │    │
 │  └─────────────────────────────────┘    │
 │  Scheduled task (auto-start on boot)    │
-│  Port proxy: LAN:port → WSL:8000       │
+│  Port proxy: LAN:8000 → WSL:8000       │
 └─────────────────────────────────────────┘
 ```
 
-## Beyond evaluation
+## For power users
 
-ikuku doesn't stop at "can I see it running":
-- **Sample data** — pre-loaded content so the app isn't empty
-- **Backup/restore** — protect your evaluation work
-- **Update scripts** — stay current with upstream
-- **Windows-native touches** — Start Menu, system tray, notifications
+```powershell
+# Install with specific apps
+powershell -File install.ps1 -Apps "wiki,lms"
 
-## Community
-
-ikuku is a distribution channel for Frappe apps, not a fork. We depend on and contribute to the [Frappe ecosystem](https://github.com/frappe).
+# Manage
+powershell -File start.ps1
+powershell -File stop.ps1
+powershell -File uninstall.ps1
+```
 
 ## Requirements
 
@@ -58,3 +64,6 @@ ikuku is a distribution channel for Frappe apps, not a fork. We depend on and co
 - 16 GB RAM recommended
 - Admin rights for install
 
+## Community
+
+ikuku is a distribution channel for Frappe apps, not a fork. We depend on and contribute to the [Frappe ecosystem](https://github.com/frappe).

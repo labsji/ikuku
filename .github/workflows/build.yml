@@ -1,17 +1,9 @@
-# Build Windows installers for Frappe apps
+# Build ikuku installer
 name: Build Installer
 
 on:
   workflow_dispatch:
     inputs:
-      app:
-        description: 'Frappe app'
-        required: true
-        type: choice
-        options:
-          - lms
-          - erpnext
-          - Wiki
       variant:
         description: 'Installer variant'
         required: true
@@ -22,7 +14,10 @@ on:
           - full
   push:
     paths:
-      - 'lms/**'
+      - '*.ps1'
+      - '*.nsi'
+      - 'init.sh'
+      - 'docker-compose.yml'
       - 'shared/**'
       - '.github/workflows/build.yml'
 
@@ -30,7 +25,6 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      APP: ${{ inputs.app || 'lms' }}
       VARIANT: ${{ inputs.variant || 'lite' }}
 
     steps:
@@ -39,11 +33,11 @@ jobs:
       - name: Install NSIS
         run: choco install nsis -y
 
-      - name: Build ${{ env.APP }} ${{ env.VARIANT }} installer
-        run: powershell -ExecutionPolicy Bypass -File ${{ env.APP }}/build-installer.ps1 -Variant ${{ env.VARIANT }}
+      - name: Build ${{ env.VARIANT }} installer
+        run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant ${{ env.VARIANT }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frappe-${{ env.APP }}-${{ env.VARIANT }}
-          path: ${{ env.APP }}/frappe-${{ env.APP }}-${{ env.VARIANT }}.exe
+          name: ikuku-${{ env.VARIANT }}
+          path: ikuku-${{ env.VARIANT }}.exe
