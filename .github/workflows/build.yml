@@ -11,6 +11,10 @@ on:
         options:
           - lite
           - full
+      release:
+        description: 'Create GitHub Release'
+        type: boolean
+        default: false
   push:
     paths:
       - '*.ps1'
@@ -33,10 +37,8 @@ jobs:
           aws-region: ap-south-1
 
       - name: Trigger CodeBuild
-        id: codebuild
         run: |
           BUILD_ID=$(aws codebuild start-build --project-name ikuku-bundle --query 'build.id' --output text)
-          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
           echo "Waiting for CodeBuild $BUILD_ID..."
           while true; do
             STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" --query 'builds[0].buildStatus' --output text)
@@ -59,7 +61,7 @@ jobs:
       - name: Install NSIS
         run: choco install nsis -y
 
-      - name: Download bundle from S3
+      - name: Configure AWS
         if: env.VARIANT == 'full'
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -71,7 +73,7 @@ jobs:
         if: env.VARIANT == 'full'
         run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
 
-      - name: Build ${{ env.VARIANT }} installer
+      - name: Build installer
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant ${{ env.VARIANT }}
 
       - name: Upload artifact
@@ -80,9 +82,23 @@ jobs:
           name: ikuku-${{ env.VARIANT }}
           path: ikuku-${{ env.VARIANT }}.exe
 
-      - name: Upload bundle zip (full only)
-        if: env.VARIANT == 'full'
-        uses: actions/upload-artifact@v4
+  release:
+    needs: [build]
+    if: inputs.release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          name: ikuku-full-bundle
-          path: bundle/
+          name: ikuku-${{ inputs.variant }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: ikuku ${{ inputs.variant }} v${{ github.run_number }}
+          files: ikuku-${{ inputs.variant }}.exe
+          generate_release_notes: true

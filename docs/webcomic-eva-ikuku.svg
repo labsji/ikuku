@@ -14,7 +14,7 @@
     .cmd { font-family: monospace; font-size: 12px; fill: #2c3e50; }
     .screen { fill: #1a1a2e; rx: 4; }
     .screentext { font-family: monospace; font-size: 11px; fill: #0f0; }
-    .kiro { font-size: 9px; fill: #aaa; font-style: italic; }
+    .kiro { font-size: 13px; fill: #888; font-style: italic; }
     .eva-hair { fill: #4a2c0a; }
     .eva-skin { fill: #f5d0a9; }
     .eva-shirt { fill: #3498db; }
