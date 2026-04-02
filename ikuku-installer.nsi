@@ -117,6 +117,12 @@ Section "Install"
     File "shared\service-setup.ps1"
     SetOutPath $INSTDIR
 
+    ; Bundle: if full variant, copy bundle from launch dir (shipped alongside exe)
+    !if "${VARIANT}" == "full"
+        ; Bundle is expected next to the exe, copy to install dir
+        nsExec::ExecToLog 'xcopy "$EXEDIR\bundle" "$INSTDIR\bundle\" /E /I /Y'
+    !endif
+
     ; Run installer with selected apps
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
 

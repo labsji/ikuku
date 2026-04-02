@@ -31,7 +31,29 @@ if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
 
 # Step 1: WSL2 + Ubuntu + Podman
 Write-Host "Setting up WSL2 + Podman..."
-& "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
+$bundleDir = Join-Path $scriptDir "bundle"
+if (Test-Path "$bundleDir\wsl.msi") {
+    # Full/offline: install from bundled files
+    Write-Host "(offline mode — using bundled files)"
+    if (!(Test-Path "C:\Program Files\WSL\wsl.exe")) {
+        msiexec /i "$bundleDir\wsl.msi" /quiet /norestart; Start-Sleep 10
+    }
+    & "C:\Program Files\WSL\wsl.exe" --set-default-version 2
+    Add-AppxPackage "$bundleDir\ubuntu.appx" -ErrorAction SilentlyContinue
+    $ubuntuExe = (Get-AppxPackage *Ubuntu*).InstallLocation + "\ubuntu.exe"
+    if (Test-Path $ubuntuExe) { & $ubuntuExe install --root }
+    # Install podman
+    & wsl.exe -u root -- bash -c "apt-get update && apt-get install -y podman podman-compose > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [\"docker.io\"]' >> /etc/containers/registries.conf"
+    # Load bundled container images
+    if (Test-Path "$bundleDir\img-mariadb.tar") {
+        Write-Host "Loading container images (offline)..."
+        $wslBundle = (& wsl.exe -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
+        & wsl.exe -u root -- bash -c "podman load -i $wslBundle/img-mariadb.tar && podman load -i $wslBundle/img-redis.tar && cat $wslBundle/img-bench.tar.part* | podman load"
+    }
+} else {
+    # Lite: download everything
+    & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
+}
 
 # Step 2: Copy docker config into WSL with selected apps
 Write-Host "Setting up Frappe in WSL..."
