@@ -1,4 +1,4 @@
-; ikuku-installer.nsi — NSIS installer for Frappe apps on Windows
+; ikuku-installer.nsi - NSIS installer for Frappe apps on Windows
 ; Build: makensis /DVARIANT=lite|full ikuku-installer.nsi
 
 !include "MUI2.nsh"
@@ -7,9 +7,9 @@
     !define VARIANT "lite"
 !endif
 
-Name "ikuku — Frappe on Windows"
+Name "ikuku - Frappe on Windows"
 OutFile "ikuku-${VARIANT}.exe"
-InstallDir "$PROGRAMFILES\ikuku"
+InstallDir "$PROGRAMFILES64\ikuku"
 RequestExecutionLevel admin
 
 !insertmacro MUI_PAGE_WELCOME
@@ -31,17 +31,17 @@ Function AppsPage
 
     ${NSD_CreateLabel} 0 0 100% 20u "Select Frappe apps to install (all share one port):"
 
-    ${NSD_CreateCheckbox} 20u 30u 200u 12u "Wiki — documentation & knowledge base"
+    ${NSD_CreateCheckbox} 20u 30u 200u 12u "Wiki - documentation & knowledge base"
     Pop $WikiCheck
     ${NSD_Check} $WikiCheck
 
-    ${NSD_CreateCheckbox} 20u 50u 200u 12u "LMS — learning management system"
+    ${NSD_CreateCheckbox} 20u 50u 200u 12u "LMS - learning management system"
     Pop $LmsCheck
 
-    ${NSD_CreateCheckbox} 20u 70u 200u 12u "ERPNext — enterprise resource planning"
+    ${NSD_CreateCheckbox} 20u 70u 200u 12u "ERPNext - enterprise resource planning"
     Pop $ErpNextCheck
 
-    ${NSD_CreateCheckbox} 20u 90u 200u 12u "CRM — customer relationship management"
+    ${NSD_CreateCheckbox} 20u 90u 200u 12u "CRM - customer relationship management"
     Pop $CrmCheck
 
     ${NSD_CreateLabel} 0 115u 100% 12u "Custom Frappe app (GitHub URL or name):"
@@ -134,7 +134,7 @@ Section "Install"
 
     ; Uninstaller + Add/Remove Programs
     WriteUninstaller "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku — Frappe on Windows"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku - Frappe on Windows"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "ikuku"
 SectionEnd
