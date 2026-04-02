@@ -1,4 +1,3 @@
-# Build ikuku installer
 name: Build Installer
 
 on:
@@ -22,7 +21,34 @@ on:
       - '.github/workflows/build.yml'
 
 jobs:
+  bundle:
+    if: inputs.variant == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Trigger CodeBuild
+        id: codebuild
+        run: |
+          BUILD_ID=$(aws codebuild start-build --project-name ikuku-bundle --query 'build.id' --output text)
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Waiting for CodeBuild $BUILD_ID..."
+          while true; do
+            STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" --query 'builds[0].buildStatus' --output text)
+            echo "  Status: $STATUS"
+            [ "$STATUS" != "IN_PROGRESS" ] && break
+            sleep 30
+          done
+          [ "$STATUS" = "SUCCEEDED" ] || { echo "CodeBuild failed: $STATUS"; exit 1; }
+
   build:
+    needs: [bundle]
+    if: always() && (needs.bundle.result == 'success' || needs.bundle.result == 'skipped')
     runs-on: windows-latest
     env:
       VARIANT: ${{ inputs.variant || 'lite' }}
@@ -33,6 +59,18 @@ jobs:
       - name: Install NSIS
         run: choco install nsis -y
 
+      - name: Download bundle from S3
+        if: env.VARIANT == 'full'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Fetch bundle
+        if: env.VARIANT == 'full'
+        run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
+
       - name: Build ${{ env.VARIANT }} installer
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant ${{ env.VARIANT }}
 
@@ -41,3 +79,10 @@ jobs:
         with:
           name: ikuku-${{ env.VARIANT }}
           path: ikuku-${{ env.VARIANT }}.exe
+
+      - name: Upload bundle zip (full only)
+        if: env.VARIANT == 'full'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ikuku-full-bundle
+          path: bundle/

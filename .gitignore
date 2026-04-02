@@ -3,3 +3,4 @@
 *.msi
 *.appx
 bundle/
+aws/
