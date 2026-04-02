@@ -68,6 +68,10 @@ powershell -File uninstall.ps1
 
 ikuku is a distribution channel for Frappe apps, not a fork. We depend on and contribute to the [Frappe ecosystem](https://github.com/frappe).
 
+## The Eva Story
+
+![How Eva put four Frappe apps on every Windows machine in the building](docs/webcomic-eva-ikuku.svg)
+
 ## Credits
 
 Co-created with [Kiro](https://kiro.dev) — from architecture decisions to NSIS wizards to CI pipelines, every line was pair-programmed in `kiro-cli`.
