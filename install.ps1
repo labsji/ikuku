@@ -1,4 +1,4 @@
-# install.ps1 — ikuku: install Frappe apps on Windows
+# install.ps1 - ikuku: install Frappe apps on Windows
 # Usage: powershell -File install.ps1 -Apps "wiki,lms"
 param([string]$Apps = "wiki")
 
@@ -34,21 +34,22 @@ Write-Host "Setting up WSL2 + Podman..."
 $bundleDir = Join-Path $scriptDir "bundle"
 if (Test-Path "$bundleDir\wsl.msi") {
     # Full/offline: install from bundled files
-    Write-Host "(offline mode — using bundled files)"
+    Write-Host "(offline mode - using bundled files)"
     if (!(Test-Path "C:\Program Files\WSL\wsl.exe")) {
-        msiexec /i "$bundleDir\wsl.msi" /quiet /norestart; Start-Sleep 10
+        msiexec /i "$bundleDir\wsl.msi" /quiet /norestart
+        Start-Sleep 10
     }
     & "C:\Program Files\WSL\wsl.exe" --set-default-version 2
     Add-AppxPackage "$bundleDir\ubuntu.appx" -ErrorAction SilentlyContinue
     $ubuntuExe = (Get-AppxPackage *Ubuntu*).InstallLocation + "\ubuntu.exe"
     if (Test-Path $ubuntuExe) { & $ubuntuExe install --root }
     # Install podman
-    & wsl.exe -u root -- bash -c "apt-get update && apt-get install -y podman podman-compose > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [\"docker.io\"]' >> /etc/containers/registries.conf"
+    & wsl.exe -u root -- bash -c "apt-get update; apt-get install -y podman podman-compose > /dev/null 2>&1; sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf; echo 'unqualified-search-registries = [""docker.io""]' >> /etc/containers/registries.conf"
     # Load bundled container images
     if (Test-Path "$bundleDir\img-mariadb.tar") {
         Write-Host "Loading container images (offline)..."
         $wslBundle = (& wsl.exe -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
-        & wsl.exe -u root -- bash -c "podman load -i $wslBundle/img-mariadb.tar && podman load -i $wslBundle/img-redis.tar && cat $wslBundle/img-bench.tar.part* | podman load"
+        & wsl.exe -u root -- bash -c "podman load -i $wslBundle/img-mariadb.tar; podman load -i $wslBundle/img-redis.tar; cat $wslBundle/img-bench.tar.part* | podman load"
     }
 } else {
     # Lite: download everything
@@ -99,4 +100,4 @@ foreach ($r in $routes) {
 Write-Host "LAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)"
 Write-Host "Login: Administrator / admin"
 Write-Host ""
-Write-Host "To uninstall: powershell -File `"$scriptDir\uninstall.ps1`"" -ForegroundColor DarkGray
+Write-Host ("To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1") -ForegroundColor DarkGray
