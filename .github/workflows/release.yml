@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-lite:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install NSIS
+        run: choco install nsis -y
+      - name: Build lite
+        run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ikuku-lite
+          path: ikuku-lite.exe
+
+  build-full:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install NSIS
+        run: choco install nsis -y
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+      - name: Fetch bundle
+        run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
+      - name: Build full
+        run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ikuku-full
+          path: ikuku-full.exe
+
+  release:
+    needs: [build-lite, build-full]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ikuku-lite
+      - uses: actions/download-artifact@v4
+        with:
+          name: ikuku-full
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ikuku-lite.exe
+            ikuku-full.exe
+          generate_release_notes: true

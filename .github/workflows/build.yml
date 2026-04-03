@@ -12,15 +12,12 @@ on:
           - lite
           - full
   push:
-    tags:
-      - 'v*'
     paths:
       - '*.ps1'
       - '*.nsi'
       - 'init.sh'
       - 'docker-compose.yml'
       - 'shared/**'
-      - '.github/workflows/build.yml'
 
 jobs:
   bundle:
@@ -79,22 +76,3 @@ jobs:
         with:
           name: ikuku-${{ env.VARIANT }}
           path: ikuku-${{ env.VARIANT }}.exe
-
-  release:
-    needs: [build]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: ikuku-lite
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ikuku-lite.exe
-          generate_release_notes: true
