@@ -12,6 +12,8 @@ on:
           - lite
           - full
   push:
+    branches:
+      - main
     paths:
       - '*.ps1'
       - '*.nsi'
