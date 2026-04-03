@@ -39,10 +39,12 @@ jobs:
         run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
+      - name: Zip full package
+        run: Compress-Archive -Path ikuku-full.exe, bundle -DestinationPath ikuku-full.zip
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-full
-          path: ikuku-full.exe
+          path: ikuku-full.zip
 
   release:
     needs: [build-lite, build-full]
@@ -62,5 +64,5 @@ jobs:
         with:
           files: |
             ikuku-lite.exe
-            ikuku-full.exe
+            ikuku-full.zip
           generate_release_notes: true
