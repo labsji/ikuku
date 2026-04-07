@@ -110,6 +110,7 @@ Section "Install"
     File "update-portproxy.ps1"
     File "docker-compose.yml"
     File "init.sh"
+    File "ikuku.ico"
 
     ; Shared scripts
     SetOutPath "$INSTDIR\shared"
@@ -128,12 +129,12 @@ Section "Install"
 
     ; Start Menu
     CreateDirectory "$SMPROGRAMS\ikuku"
-    CreateShortcut "$SMPROGRAMS\ikuku\Open.lnk" "http://localhost:8000"
-    CreateShortcut "$SMPROGRAMS\ikuku\Start.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\start.ps1"'
-    CreateShortcut "$SMPROGRAMS\ikuku\Stop.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\stop.ps1"'
+    CreateShortcut "$SMPROGRAMS\ikuku\Open.lnk" "http://localhost:8000" "" "$INSTDIR\ikuku.ico"
+    CreateShortcut "$SMPROGRAMS\ikuku\Start.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\start.ps1"' "$INSTDIR\ikuku.ico"
+    CreateShortcut "$SMPROGRAMS\ikuku\Stop.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\stop.ps1"' "$INSTDIR\ikuku.ico"
 
     ; Desktop shortcut
-    CreateShortcut "$DESKTOP\ikuku.lnk" "http://localhost:8000"
+    CreateShortcut "$DESKTOP\ikuku.lnk" "http://localhost:8000" "" "$INSTDIR\ikuku.ico"
 
     ; Uninstaller + Add/Remove Programs
     WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -144,6 +145,7 @@ SectionEnd
 
 Section "Uninstall"
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\uninstall.ps1"'
+    Delete "$DESKTOP\ikuku.lnk"
     RMDir /r "$SMPROGRAMS\ikuku"
     RMDir /r "$INSTDIR"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku"
