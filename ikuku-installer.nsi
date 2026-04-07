@@ -125,12 +125,18 @@ Section "Install"
         nsExec::ExecToLog 'xcopy "$EXEDIR\bundle" "$INSTDIR\bundle\" /E /I /Y'
     !endif
 
+    ; Always create uninstaller so failed installs can be cleaned up
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku - Frappe on Windows"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "ikuku"
+
     ; Run installer with selected apps
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
     Pop $0
     ${If} $0 != "0"
         SetDetailsView show
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Installation failed. Check the details log above."
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Installation failed. Use Add/Remove Programs to clean up."
         Abort
     ${EndIf}
 
@@ -142,12 +148,6 @@ Section "Install"
 
     ; Desktop shortcut
     CreateShortcut "$DESKTOP\ikuku.lnk" "http://localhost:8000" "" "$INSTDIR\ikuku.ico"
-
-    ; Uninstaller + Add/Remove Programs
-    WriteUninstaller "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku - Frappe on Windows"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "ikuku"
 SectionEnd
 
 Section "Uninstall"
