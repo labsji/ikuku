@@ -2,6 +2,7 @@
 ; Build: makensis /DVARIANT=lite|full ikuku-installer.nsi
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 
 !ifndef VARIANT
     !define VARIANT "lite"
@@ -126,6 +127,12 @@ Section "Install"
 
     ; Run installer with selected apps
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
+    Pop $0
+    ${If} $0 != "0"
+        SetDetailsView show
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Installation failed. Check the details log above."
+        Abort
+    ${EndIf}
 
     ; Start Menu
     CreateDirectory "$SMPROGRAMS\ikuku"
