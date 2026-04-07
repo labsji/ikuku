@@ -34,11 +34,11 @@ $wslVersion = & $WSL -l -v 2>&1 | Out-String
 if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
     $errors += "WSL is running in version 1 mode. WSL2 required."
 }
-# Smoke-test: can the WSL2 kernel actually create network namespaces?
+# Smoke-test: can podman actually create containers with networking?
 if ($errors.Count -eq 0) {
-    $nsTest = & $WSL -u root -- bash -c "unshare --net echo ok" 2>&1 | Out-String
+    $nsTest = & $WSL -u root -- bash -c "podman run --rm alpine echo ok 2>&1" | Out-String
     if ($nsTest -notmatch "ok") {
-        $errors += "WSL2 kernel cannot create network namespaces.`nThis usually means nested virtualization is not available (e.g. EC2 non-metal instances)."
+        $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
     }
 }
 if ($errors.Count -gt 0) {
