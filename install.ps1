@@ -22,23 +22,27 @@ if (Test-Path $confFile) {
 Write-Host "=== ikuku: Installing Frappe apps ===" -ForegroundColor Cyan
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
-# Step 0: Check WSL2
-$wslCheck = & $WSL --status 2>&1 | Out-String
-$wslVersion = & $WSL -l -v 2>&1 | Out-String
+# Step 0: Check WSL2 + container support
 $errors = @()
-if ($wslCheck -match "not supported" -or $wslCheck -match "not enabled" -or $wslCheck -match "error") {
+# Basic WSL check
+$wslCheck = & $WSL --status 2>&1 | Out-String
+if ($wslCheck -match "not supported|not enabled") {
     $errors += "WSL2 is not available on this system."
 }
+# Check distro version
+$wslVersion = & $WSL -l -v 2>&1 | Out-String
 if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
     $errors += "WSL is running in version 1 mode. WSL2 required."
 }
-# Check hardware virtualization
-$hyperv = (Get-CimInstance Win32_ComputerSystem).HypervisorPresent
-if (-not $hyperv) {
-    $errors += "Hardware virtualization (Hyper-V) is not enabled or not supported."
+# Smoke-test: can the WSL2 kernel actually create network namespaces?
+if ($errors.Count -eq 0) {
+    $nsTest = & $WSL -u root -- bash -c "unshare --net echo ok" 2>&1 | Out-String
+    if ($nsTest -notmatch "ok") {
+        $errors += "WSL2 kernel cannot create network namespaces.`nThis usually means nested virtualization is not available (e.g. EC2 non-metal instances)."
+    }
 }
 if ($errors.Count -gt 0) {
-    $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization enabled in BIOS`n- WSL2 (not WSL1)`n`nFiles have been extracted to: $scriptDir"
+    $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization (nested virt for VMs)`n- WSL2 with a real Linux kernel`n`nFiles have been extracted to: $scriptDir"
     Write-Host "ERROR: $msg" -ForegroundColor Red
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show($msg, "ikuku - Installation Failed", "OK", "Error") | Out-Null
