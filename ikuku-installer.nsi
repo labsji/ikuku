@@ -132,6 +132,9 @@ Section "Install"
     CreateShortcut "$SMPROGRAMS\ikuku\Start.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\start.ps1"'
     CreateShortcut "$SMPROGRAMS\ikuku\Stop.lnk" "powershell.exe" '-ExecutionPolicy Bypass -File "$INSTDIR\stop.ps1"'
 
+    ; Desktop shortcut
+    CreateShortcut "$DESKTOP\ikuku.lnk" "http://localhost:8000"
+
     ; Uninstaller + Add/Remove Programs
     WriteUninstaller "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku - Frappe on Windows"

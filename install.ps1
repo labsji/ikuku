@@ -23,10 +23,26 @@ Write-Host "=== ikuku: Installing Frappe apps ===" -ForegroundColor Cyan
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
 # Step 0: Check WSL2
+$wslCheck = & $WSL --status 2>&1 | Out-String
 $wslVersion = & $WSL -l -v 2>&1 | Out-String
+$errors = @()
+if ($wslCheck -match "not supported" -or $wslCheck -match "not enabled" -or $wslCheck -match "error") {
+    $errors += "WSL2 is not available on this system."
+}
 if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
-    Write-Host "WARNING: WSL is running in version 1 mode." -ForegroundColor Yellow
-    Write-Host "ikuku requires WSL2 (hardware virtualization / Hyper-V)."
+    $errors += "WSL is running in version 1 mode. WSL2 required."
+}
+# Check hardware virtualization
+$hyperv = (Get-CimInstance Win32_ComputerSystem).HypervisorPresent
+if (-not $hyperv) {
+    $errors += "Hardware virtualization (Hyper-V) is not enabled or not supported."
+}
+if ($errors.Count -gt 0) {
+    $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization enabled in BIOS`n- WSL2 (not WSL1)`n`nFiles have been extracted to: $scriptDir"
+    Write-Host "ERROR: $msg" -ForegroundColor Red
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show($msg, "ikuku - Installation Failed", "OK", "Error") | Out-Null
+    exit 1
 }
 
 # Step 1: WSL2 + Ubuntu + Podman
@@ -82,10 +98,16 @@ $Apps -split ',' | ForEach-Object {
 Write-Host ""
 Write-Host "=== ikuku installed! ===" -ForegroundColor Green
 Write-Host "Port: $($conf.LMS_PORT)"
+$urlList = ""
 foreach ($r in $routes) {
     Write-Host "  http://localhost:$($conf.LMS_PORT)$r"
+    $urlList += "  http://localhost:$($conf.LMS_PORT)$r`n"
 }
 Write-Host "LAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)"
 Write-Host "Login: Administrator / admin"
 Write-Host ""
 Write-Host ("To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1") -ForegroundColor DarkGray
+
+Add-Type -AssemblyName System.Windows.Forms
+$successMsg = "ikuku installed successfully!`n`n$urlList`nLAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)`nLogin: Administrator / admin`n`nNote: First startup may take a few minutes."
+[System.Windows.Forms.MessageBox]::Show($successMsg, "ikuku - Installation Complete", "OK", "Information") | Out-Null
