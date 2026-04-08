@@ -1,5 +1,7 @@
 # stop.ps1 — Stop ikuku
-$WSL = "wsl.exe"
+$WSL = $null
+if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
+elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
 schtasks /end /tn "ikuku" 2>$null
 & $WSL -u root -- bash -c "cd /opt/ikuku && podman-compose down" 2>$null
 

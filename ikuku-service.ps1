@@ -1,6 +1,8 @@
 # ikuku-service.ps1 — Scheduled task entry point
 # Starts containers, waits for ready, refreshes port proxy, keeps WSL alive
-$WSL = "wsl.exe"
+$WSL = $null
+if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
+elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
 $IKUKU_DIR = "/opt/ikuku"
 
 # Wait for WSL systemd

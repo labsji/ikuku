@@ -66,8 +66,8 @@ $hasBundle = Test-Path "$bundleDir\img-mariadb.tar"
 # Load bundled container images if available (full/offline)
 if ($hasBundle) {
     Write-Host "Loading container images (offline)..."
-    $wslBundle = (& wsl.exe -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
-    & wsl.exe -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load"
+    $wslBundle = (& $WSL -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
+    & $WSL -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load"
 }
 
 # Step 2: Copy docker config into WSL with selected apps
