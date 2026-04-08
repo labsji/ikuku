@@ -1,7 +1,9 @@
 # shared/wsl-setup.ps1 — Common WSL2 + podman setup for all Frappe apps
 param([string]$MemoryGB = "12", [string]$SwapGB = "4")
 
-$WSL = "wsl.exe"
+$WSL = $null
+if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
+elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
 
 # WSL memory config
 @("[wsl2]","memory=${MemoryGB}GB","swap=${SwapGB}GB") | Set-Content "$env:USERPROFILE\.wslconfig"
