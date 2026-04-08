@@ -3,9 +3,9 @@
 param([string]$Apps = "wiki")
 
 $ErrorActionPreference = "Stop"
-$WSL = if (Get-Command wsl.exe -ErrorAction SilentlyContinue) { "wsl.exe" }
-       elseif (Test-Path "C:\Program Files\WSL\wsl.exe") { "C:\Program Files\WSL\wsl.exe" }
-       else { $null }
+$WSL = $null
+if (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
+elseif (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
 $IKUKU_DIR = "/opt/ikuku"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sharedDir = Join-Path $scriptDir "shared"
