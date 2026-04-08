@@ -116,8 +116,7 @@ foreach ($r in $routes) {
 Write-Host "LAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)"
 Write-Host "Login: Administrator / admin"
 Write-Host ""
+Write-Host "IMPORTANT: First startup takes 5-10 minutes while apps are compiled." -ForegroundColor Yellow
+Write-Host "Refresh the browser if you see a blank page or connection error." -ForegroundColor Yellow
+Write-Host ""
 Write-Host ("To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1") -ForegroundColor DarkGray
-
-Add-Type -AssemblyName System.Windows.Forms
-$successMsg = "ikuku installed successfully!`n`n$urlList`nLAN: http://$($env:COMPUTERNAME):$($conf.LMS_PORT)`nLogin: Administrator / admin`n`nNote: First startup may take a few minutes."
-[System.Windows.Forms.MessageBox]::Show($successMsg, "ikuku - Installation Complete", "OK", "Information") | Out-Null
