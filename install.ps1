@@ -3,7 +3,9 @@
 param([string]$Apps = "wiki")
 
 $ErrorActionPreference = "Stop"
-$WSL = "wsl.exe"
+$WSL = if (Get-Command wsl.exe -ErrorAction SilentlyContinue) { "wsl.exe" }
+       elseif (Test-Path "C:\Program Files\WSL\wsl.exe") { "C:\Program Files\WSL\wsl.exe" }
+       else { $null }
 $IKUKU_DIR = "/opt/ikuku"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sharedDir = Join-Path $scriptDir "shared"
@@ -24,6 +26,9 @@ Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
 # Step 0: Check WSL2 + container support
 $errors = @()
+if (-not $WSL) {
+    $errors += "WSL is not installed. Install from https://aka.ms/wslinstall"
+} else {
 # Basic WSL check
 $wslCheck = & $WSL --status 2>&1 | Out-String
 if ($wslCheck -match "not supported|not enabled") {
@@ -41,6 +46,7 @@ if ($errors.Count -eq 0) {
         $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
     }
 }
+} # end WSL found
 if ($errors.Count -gt 0) {
     $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization (nested virt for VMs)`n- WSL2 with a real Linux kernel`n`nFiles have been extracted to: $scriptDir"
     Write-Host "ERROR: $msg" -ForegroundColor Red
