@@ -17,15 +17,15 @@ RequestExecutionLevel admin
 Page custom AppsPage AppsPageLeave
 !insertmacro MUI_PAGE_INSTFILES
 
-!define MUI_FINISHPAGE_TEXT "ikuku installed successfully!$\r$\n$\r$\nIMPORTANT: First startup takes 5-10 minutes while apps are compiled.$\r$\nRefresh the browser if you see a blank page.$\r$\n$\r$\nLogin: Administrator / admin"
+!define MUI_FINISHPAGE_TEXT "ikuku installed! Setting up Frappe apps now.$\r$\n$\r$\nClick below to open the progress page — it shows live build status$\r$\nand will redirect to ikuku when ready (5-10 minutes).$\r$\n$\r$\nLogin: Administrator / admin"
 !define MUI_FINISHPAGE_RUN ""
-!define MUI_FINISHPAGE_RUN_TEXT "Open ikuku in browser"
+!define MUI_FINISHPAGE_RUN_TEXT "Open progress page"
 !define MUI_FINISHPAGE_RUN_FUNCTION "OpenBrowser"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
 
 Function OpenBrowser
-    ExecShell "open" "http://localhost:8000"
+    ExecShell "open" "http://localhost:8080"
 FunctionEnd
 
 Var WikiCheck
@@ -121,6 +121,8 @@ Section "Install"
     File "docker-compose.yml"
     File "init.sh"
     File "ikuku.ico"
+    File "progress.py"
+    File "progress.html"
 
     ; Shared scripts
     SetOutPath "$INSTDIR\shared"

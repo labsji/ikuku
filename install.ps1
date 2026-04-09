@@ -91,6 +91,12 @@ powercfg /change hibernate-timeout-dc 0
 
 # Step 5: Firewall rule
 netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=$($conf.LMS_PORT)
+netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow protocol=TCP localport=8080
+
+# Step 6: Copy progress files and start progress server
+Write-Host "Starting progress monitor..."
+& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/; sed -i 's/\r//g' $IKUKU_DIR/progress.py"
+& $WSL -u root -- bash -c "mkdir -p /run/user/0; cd $IKUKU_DIR; nohup python3 progress.py 8080 > /tmp/ikuku-progress.log 2>&1 &"
 
 # Build access URLs
 $routes = @()

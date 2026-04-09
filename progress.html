@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ikuku — Setting up</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);padding:40px;max-width:600px;width:90%}
+h1{font-size:1.4em;margin-bottom:8px;color:#333}
+.subtitle{color:#666;margin-bottom:24px;font-size:.9em}
+.phase{font-size:1.1em;font-weight:600;margin-bottom:16px;color:#1a73e8}
+.phase.error{color:#d32f2f}
+.phase.ready{color:#2e7d32}
+.bar{height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-bottom:20px}
+.bar-fill{height:100%;background:#1a73e8;border-radius:3px;transition:width .5s}
+.bar-fill.error{background:#d32f2f}
+.bar-fill.ready{background:#2e7d32}
+.logs{background:#1e1e1e;color:#d4d4d4;font-family:'Cascadia Code',Consolas,monospace;font-size:.75em;padding:16px;border-radius:8px;max-height:250px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.logs:empty::after{content:"Waiting for container logs...";color:#666}
+.hint{margin-top:16px;padding:12px;background:#fff3e0;border-radius:8px;font-size:.85em;color:#e65100;display:none}
+.hint.show{display:block}
+.ready-msg{margin-top:20px;text-align:center;display:none}
+.ready-msg.show{display:block}
+.ready-msg a{display:inline-block;padding:12px 32px;background:#1a73e8;color:#fff;text-decoration:none;border-radius:8px;font-weight:600}
+.ready-msg a:hover{background:#1557b0}
+.ready-msg p{margin-top:8px;color:#666;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🐔 ikuku — Setting up Frappe</h1>
+  <p class="subtitle">First-time setup takes 5–10 minutes. This page updates automatically.</p>
+  <div class="phase" id="phase">Starting containers...</div>
+  <div class="bar"><div class="bar-fill" id="bar" style="width:5%"></div></div>
+  <div class="logs" id="logs"></div>
+  <div class="hint" id="hint"></div>
+  <div class="ready-msg" id="ready">
+    <a href="http://localhost:8000">Open ikuku</a>
+    <p>Login: Administrator / admin</p>
+  </div>
+</div>
+<script>
+const phases = {
+  starting: {text:"Starting containers...", pct:10},
+  installing_apps: {text:"Installing Frappe apps...", pct:35},
+  building_assets: {text:"Building frontend assets...", pct:60},
+  creating_site: {text:"Creating site & database...", pct:80},
+  ready: {text:"Ready!", pct:100},
+  error: {text:"Error encountered", pct:0}
+};
+const hints = {
+  error: "Check the logs above for details. You can retry by running:<br><code>powershell -File \"C:\\Program Files\\ikuku\\start.ps1\"</code>"
+};
+function update() {
+  fetch("/status").then(r=>r.json()).then(d=>{
+    const p = phases[d.phase] || phases.starting;
+    const el = id => document.getElementById(id);
+    el("phase").textContent = p.text;
+    el("phase").className = "phase" + (d.phase==="error"?" error":"") + (d.ready?" ready":"");
+    el("bar").style.width = p.pct + "%";
+    el("bar").className = "bar-fill" + (d.phase==="error"?" error":"") + (d.ready?" ready":"");
+    el("logs").textContent = d.lines.join("\n");
+    el("logs").scrollTop = el("logs").scrollHeight;
+    if (d.error && hints[d.phase]) { el("hint").innerHTML = hints[d.phase]; el("hint").classList.add("show"); }
+    if (d.ready) { el("ready").classList.add("show"); clearInterval(timer); }
+  }).catch(()=>{});
+}
+const timer = setInterval(update, 3000);
+update();
+</script>
+</body>
+</html>
