@@ -58,21 +58,13 @@ def apply_setup():
     try:
         with open(SETUP_FILE) as f:
             cfg = json.load(f)
-        cmds = []
-        if cfg.get("language"):
-            cmds.append(f"bench --site {SITE} set-config language '{cfg['language']}'")
-        if cfg.get("currency"):
-            cmds.append(f"bench --site {SITE} execute frappe.client.set_value --args \"['Currency','{cfg['currency']}','enabled',1]\"")
-        if cfg.get("country"):
-            cmds.append(f"bench --site {SITE} set-config country '{cfg['country']}'")
-        if cfg.get("timezone"):
-            cmds.append(f"bench --site {SITE} set-config time_zone '{cfg['timezone']}'")
-        if cmds:
-            full_cmd = " && ".join(cmds)
-            subprocess.run(
-                ["podman", "exec", CONTAINER, "bash", "-c", f"cd /home/frappe/frappe-bench && {full_cmd}"],
-                capture_output=True, text=True, timeout=60
-            )
+        for key, val in [("language", cfg.get("language")), ("country", cfg.get("country")), ("time_zone", cfg.get("timezone"))]:
+            if val:
+                subprocess.run(
+                    ["podman", "exec", "-w", "/home/frappe/frappe-bench", CONTAINER,
+                     "bench", "--site", SITE, "set-config", key, val],
+                    capture_output=True, text=True, timeout=30
+                )
         status["configured"] = True
     except Exception as e:
         status["error"] = f"Setup failed: {e}"
