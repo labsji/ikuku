@@ -74,7 +74,7 @@ if ($hasBundle) {
 Write-Host "Setting up Frappe in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR"
 $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim()
-& $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; sed -i 's/\r//g' $IKUKU_DIR/init.sh"
+& $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/init.sh > $IKUKU_DIR/init.sh.tmp; mv $IKUKU_DIR/init.sh.tmp $IKUKU_DIR/init.sh"
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
 
@@ -95,7 +95,7 @@ netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow pr
 
 # Step 6: Copy progress files and start progress server
 Write-Host "Starting progress monitor..."
-& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/; sed -i 's/\r//g' $IKUKU_DIR/progress.py $IKUKU_DIR/progress.html"
+& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/; for f in progress.py progress.html; do tr -d '\r' < $IKUKU_DIR/\$f > $IKUKU_DIR/\$f.tmp; mv $IKUKU_DIR/\$f.tmp $IKUKU_DIR/\$f; done"
 Start-Process -WindowStyle Hidden -FilePath $WSL -ArgumentList "-u root -e bash -c `"mkdir -p /run/user/0; cd /opt/ikuku; exec python3 progress.py 8080`""
 
 # Build access URLs
