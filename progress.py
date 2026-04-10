@@ -21,7 +21,7 @@ def poll_logs():
     start_time = time.time()
     while not status["ready"]:
         try:
-            r = subprocess.run(["podman", "logs", "--since", "60s", CONTAINER], capture_output=True, text=True, timeout=5)
+            r = subprocess.run(["podman", "logs", "--tail", "30", CONTAINER], capture_output=True, text=True, timeout=15)
             full = r.stdout + r.stderr
             lines = full.strip().split("\n")[-30:]
             status["lines"] = lines

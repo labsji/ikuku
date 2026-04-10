@@ -4,3 +4,4 @@
 *.appx
 bundle/
 aws/
+__pycache__
