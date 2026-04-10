@@ -1,5 +1,5 @@
 #!/bin/bash
-# init.sh — single bench, multiple apps based on IKUKU_APPS env var
+# init.sh - single bench, multiple apps based on IKUKU_APPS env var
 # IKUKU_APPS is a comma-separated list: "wiki,lms" or just "wiki"
 
 APPS="${IKUKU_APPS:-wiki}"
@@ -51,3 +51,4 @@ bench --site "$SITE" clear-cache
 bench use "$SITE"
 
 bench start
+
