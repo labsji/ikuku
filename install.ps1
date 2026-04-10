@@ -95,8 +95,18 @@ netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow pr
 
 # Step 6: Copy progress files and start progress server
 Write-Host "Starting progress monitor..."
-& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/; for f in progress.py progress.html; do tr -d '\r' < $IKUKU_DIR/\$f > $IKUKU_DIR/\$f.tmp; mv $IKUKU_DIR/\$f.tmp $IKUKU_DIR/\$f; done"
-Start-Process -WindowStyle Hidden -FilePath $WSL -ArgumentList "-u root -e bash -c `"mkdir -p /run/user/0; cd /opt/ikuku; exec python3 progress.py 8080`""
+& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/"
+# Start progress server via scheduled task (survives SSH disconnect)
+& $WSL -u root -- bash -c "echo '#!/bin/bash
+mkdir -p /run/user/0
+cd /opt/ikuku
+exec python3 progress.py 8080' > $IKUKU_DIR/start-progress.sh; chmod +x $IKUKU_DIR/start-progress.sh"
+schtasks /create /tn "ikuku-progress" /tr "`"$WSL`" -u root -e bash /opt/ikuku/start-progress.sh" /sc onstart /ru $env:USERNAME /rp "Admin2026" /f 2>&1 | Out-Null
+schtasks /run /tn "ikuku-progress" 2>&1 | Out-Null
+Start-Sleep 3
+# Port proxy: WSL2 runs in a VM, need to forward port 8080 to Windows
+$wslIp = (& $WSL -u root -- hostname -I).Trim().Split(' ')[0]
+netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp 2>&1 | Out-Null
 
 # Build access URLs
 $routes = @()
