@@ -93,20 +93,21 @@ powercfg /change hibernate-timeout-dc 0
 netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=$($conf.LMS_PORT)
 netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow protocol=TCP localport=8080
 
-# Step 6: Copy progress files and start progress server
+# Step 6: Copy progress files and start progress server (non-fatal)
+try {
 Write-Host "Starting progress monitor..."
 & $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/"
-# Start progress server via scheduled task (survives SSH disconnect)
 & $WSL -u root -- bash -c "echo '#!/bin/bash
 mkdir -p /run/user/0
 cd /opt/ikuku
 exec python3 progress.py 8080' > $IKUKU_DIR/start-progress.sh; chmod +x $IKUKU_DIR/start-progress.sh"
-schtasks /create /tn "ikuku-progress" /tr "`"$WSL`" -u root -e bash /opt/ikuku/start-progress.sh" /sc onstart /ru $env:USERNAME /rp "Admin2026" /f 2>&1 | Out-Null
+Set-Content "$scriptDir\start-progress.bat" "@echo off`r`n`"$WSL`" -u root -e bash /opt/ikuku/start-progress.sh"
+schtasks /create /tn "ikuku-progress" /tr "`"$scriptDir\start-progress.bat`"" /sc onstart /ru $env:USERNAME /rp "Admin2026" /f 2>&1 | Out-Null
 schtasks /run /tn "ikuku-progress" 2>&1 | Out-Null
 Start-Sleep 3
-# Port proxy: WSL2 runs in a VM, need to forward port 8080 to Windows
 $wslIp = (& $WSL -u root -- hostname -I).Trim().Split(' ')[0]
 netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp 2>&1 | Out-Null
+} catch { Write-Host "Progress monitor failed (non-fatal): $_" -ForegroundColor Yellow }
 
 # Build access URLs
 $routes = @()
