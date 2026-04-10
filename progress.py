@@ -18,25 +18,33 @@ status = {"phase": "starting", "lines": [], "ready": False, "error": None, "conf
 
 def poll_logs():
     global status
+    start_time = time.time()
     while not status["ready"]:
         try:
-            r = subprocess.run(["podman", "logs", CONTAINER], capture_output=True, text=True, timeout=5)
+            r = subprocess.run(["podman", "logs", "--since", "60s", CONTAINER], capture_output=True, text=True, timeout=5)
             full = r.stdout + r.stderr
             lines = full.strip().split("\n")[-30:]
             status["lines"] = lines
-            if "Booting worker" in full or "Running on" in full:
-                status["phase"] = "ready"
-                status["ready"] = True
-            elif any(k in full for k in ["bench get-app", "Getting", "Cloning"]):
-                status["phase"] = "installing_apps"
-            elif any(k in full for k in ["yarn", "Building", "DONE  Total Build"]):
-                status["phase"] = "building_assets"
-            elif any(k in full for k in ["new-site", "migrate", "install-app", "Installing app"]):
-                status["phase"] = "creating_site"
-            elif "bench init" in full or "Creating new bench" in full:
-                status["phase"] = "initializing"
-            else:
-                status["phase"] = "starting"
+            # Only mark ready via actual HTTP check (not log strings which persist)
+            if time.time() - start_time > 30:
+                try:
+                    import urllib.request
+                    urllib.request.urlopen("http://localhost:8000", timeout=3)
+                    status["phase"] = "ready"
+                    status["ready"] = True
+                except Exception:
+                    pass
+            if not status["ready"]:
+                if any(k in full for k in ["bench get-app", "Getting", "Cloning"]):
+                    status["phase"] = "installing_apps"
+                elif any(k in full for k in ["yarn", "Building", "DONE  Total Build"]):
+                    status["phase"] = "building_assets"
+                elif any(k in full for k in ["new-site", "migrate", "install-app", "Installing app"]):
+                    status["phase"] = "creating_site"
+                elif "bench init" in full or "Creating new bench" in full:
+                    status["phase"] = "initializing"
+                else:
+                    status["phase"] = "starting"
         except Exception as e:
             status["error"] = str(e)
         time.sleep(3)
