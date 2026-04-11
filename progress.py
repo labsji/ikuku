@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ikuku install progress server — serves status page, polls podman logs, applies setup."""
+"""ikuku install progress server — serves status page and polls podman logs."""
 import http.server
 import json
 import subprocess
@@ -11,10 +11,8 @@ import sys
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "progress.html")
 CONTAINER = "ikuku_frappe_1"
-SETUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup.json")
-SITE = "ikuku.localhost"
 
-status = {"phase": "starting", "lines": [], "ready": False, "error": None, "configured": False}
+status = {"phase": "starting", "lines": [], "ready": False, "error": None}
 
 def poll_logs():
     global status
@@ -25,7 +23,6 @@ def poll_logs():
             full = r.stdout + r.stderr
             lines = full.strip().split("\n")[-30:]
             status["lines"] = lines
-            # Only mark ready via actual HTTP check (not log strings which persist)
             if time.time() - start_time > 30:
                 try:
                     import urllib.request
@@ -49,27 +46,6 @@ def poll_logs():
             status["error"] = str(e)
         time.sleep(3)
 
-def apply_setup():
-    """Apply user choices from setup.json after Frappe is ready."""
-    global status
-    if not os.path.exists(SETUP_FILE):
-        status["configured"] = True
-        return
-    try:
-        with open(SETUP_FILE) as f:
-            cfg = json.load(f)
-        for key, val in [("language", cfg.get("language")), ("country", cfg.get("country")), ("time_zone", cfg.get("timezone"))]:
-            if val:
-                subprocess.run(
-                    ["podman", "exec", "-w", "/home/frappe/frappe-bench", CONTAINER,
-                     "bench", "--site", SITE, "set-config", key, val],
-                    capture_output=True, text=True, timeout=30
-                )
-        status["configured"] = True
-    except Exception as e:
-        status["error"] = f"Setup failed: {e}"
-        status["configured"] = True
-
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/status":
@@ -88,40 +64,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    def do_POST(self):
-        if self.path == "/setup":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            try:
-                cfg = json.loads(body)
-                with open(SETUP_FILE, "w") as f:
-                    json.dump(cfg, f)
-                # If already ready, apply now
-                if status["ready"]:
-                    threading.Thread(target=apply_setup, daemon=True).start()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"ok": True}).encode())
-            except Exception as e:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(str(e).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-
     def log_message(self, *args):
         pass
 
-def wait_and_apply():
-    """Wait for ready, then apply setup if saved."""
-    while not status["ready"]:
-        time.sleep(3)
-    apply_setup()
-
 if __name__ == "__main__":
     threading.Thread(target=poll_logs, daemon=True).start()
-    threading.Thread(target=wait_and_apply, daemon=True).start()
     print(f"Progress server on http://localhost:{PORT}")
     http.server.HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
