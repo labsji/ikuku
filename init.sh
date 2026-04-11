@@ -47,6 +47,7 @@ for app in "${APP_LIST[@]}"; do
 done
 
 bench --site "$SITE" set-config developer_mode 1
+bench --site "$SITE" set-config setup_complete 1
 bench --site "$SITE" clear-cache
 bench use "$SITE"
 
