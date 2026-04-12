@@ -72,6 +72,23 @@ ikuku is a distribution channel for Frappe apps, not a fork. We depend on and co
 
 ![How Eva put four Frappe apps on every Windows machine in the building](docs/webcomic-eva-ikuku.svg)
 
+## Privacy Policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+The bundled Frappe applications connect to the Frappe update server to check for updates. See the [Frappe privacy policy](https://frappecloud.com/privacy) for details.
+
+## Code Signing Policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [labsji](https://github.com/labsji)
+- Approvers: [labsji](https://github.com/labsji)
+
+## License
+
+[MIT](LICENSE)
+
 ## Credits
 
 Co-created with [Kiro](https://kiro.dev) — from architecture decisions to NSIS wizards to CI pipelines, every line was pair-programmed in `kiro-cli`.
