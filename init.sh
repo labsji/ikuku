@@ -15,7 +15,7 @@ fi
 
 export PATH="${NVM_DIR}/versions/node/v${NODE_VERSION_DEVELOP}/bin/:${PATH}"
 
-FRAPPE_BRANCH="${IKUKU_BRANCH:-version-15}"
+FRAPPE_BRANCH="${IKUKU_BRANCH:-version-16}"
 
 bench init --skip-redis-config-generation --frappe-branch "$FRAPPE_BRANCH" frappe-bench
 cd frappe-bench
@@ -28,12 +28,14 @@ bench set-redis-socketio-host redis://redis:6379
 sed -i '/redis/d' ./Procfile
 sed -i '/watch/d' ./Procfile
 
-# Install each selected app — resolve-deps picks compatible versions automatically
+# Install each selected app — try version branch first, fall back to resolve-deps
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
     app=$(echo "$app" | xargs)
     echo "Getting app: $app"
-    bench get-app --resolve-deps "$app" || bench get-app "$app"
+    bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app" 2>/dev/null \
+      || bench get-app --resolve-deps "$app" 2>/dev/null \
+      || bench get-app "$app"
 done
 
 bench new-site "$SITE" \
