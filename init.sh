@@ -15,7 +15,9 @@ fi
 
 export PATH="${NVM_DIR}/versions/node/v${NODE_VERSION_DEVELOP}/bin/:${PATH}"
 
-bench init --skip-redis-config-generation frappe-bench
+FRAPPE_BRANCH="${IKUKU_BRANCH:-version-15}"
+
+bench init --skip-redis-config-generation --frappe-branch "$FRAPPE_BRANCH" frappe-bench
 cd frappe-bench
 
 bench set-mariadb-host mariadb
@@ -26,10 +28,10 @@ bench set-redis-socketio-host redis://redis:6379
 sed -i '/redis/d' ./Procfile
 sed -i '/watch/d' ./Procfile
 
-# Install each selected app
+# Install each selected app — resolve-deps picks compatible versions automatically
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
-    app=$(echo "$app" | xargs)  # trim whitespace
+    app=$(echo "$app" | xargs)
     echo "Getting app: $app"
     bench get-app --resolve-deps "$app" || bench get-app "$app"
 done
