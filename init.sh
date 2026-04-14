@@ -28,14 +28,19 @@ bench set-redis-socketio-host redis://redis:6379
 sed -i '/redis/d' ./Procfile
 sed -i '/watch/d' ./Procfile
 
-# Install each selected app — try version branch first, fall back to resolve-deps
+# Map of apps that have a matching frappe version branch
+V16_APPS="erpnext hrms payments"
+
+# Install each selected app
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
     app=$(echo "$app" | xargs)
     echo "Getting app: $app"
-    bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app" 2>/dev/null \
-      || bench get-app --resolve-deps "$app" 2>/dev/null \
-      || bench get-app "$app"
+    if echo "$V16_APPS" | grep -qw "$app"; then
+        bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app"
+    else
+        bench get-app --resolve-deps "$app" || bench get-app "$app"
+    fi
 done
 
 bench new-site "$SITE" \
