@@ -53,15 +53,16 @@ Function AppsPage
 
     ${NSD_CreateLabel} 0 0 100% 20u "Select Frappe apps to install (all share one port):"
 
-    ${NSD_CreateCheckbox} 20u 30u 200u 12u "Wiki - documentation & knowledge base"
+    ${NSD_CreateCheckbox} 20u 30u 200u 12u "ERPNext - enterprise resource planning"
+    Pop $ErpNextCheck
+    ${NSD_Check} $ErpNextCheck
+
+    ${NSD_CreateCheckbox} 20u 50u 200u 12u "Wiki - documentation & knowledge base"
     Pop $WikiCheck
     ${NSD_Check} $WikiCheck
 
-    ${NSD_CreateCheckbox} 20u 50u 200u 12u "LMS - learning management system"
+    ${NSD_CreateCheckbox} 20u 70u 200u 12u "LMS - learning management system"
     Pop $LmsCheck
-
-    ${NSD_CreateCheckbox} 20u 70u 200u 12u "ERPNext - enterprise resource planning"
-    Pop $ErpNextCheck
 
     ${NSD_CreateCheckbox} 20u 90u 200u 12u "CRM - customer relationship management"
     Pop $CrmCheck
