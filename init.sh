@@ -31,6 +31,18 @@ sed -i '/watch/d' ./Procfile
 # Map of apps that have a matching frappe version branch
 V16_APPS="erpnext hrms payments"
 
+# Get latest release tag for an app from GitHub
+get_release_tag() {
+    local app="$1"
+    local repo="frappe/$app"
+    # For URLs, extract repo from URL
+    if echo "$app" | grep -q "github.com"; then
+        repo=$(echo "$app" | sed 's|.*github.com/||' | sed 's|\.git$||')
+        app=$(basename "$repo")
+    fi
+    curl -sf "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4
+}
+
 # Install each selected app
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
@@ -39,7 +51,13 @@ for app in "${APP_LIST[@]}"; do
     if echo "$V16_APPS" | grep -qw "$app"; then
         bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app"
     else
-        bench get-app --resolve-deps "$app" || bench get-app "$app"
+        TAG=$(get_release_tag "$app")
+        if [ -n "$TAG" ]; then
+            echo "  Using release $TAG"
+            bench get-app --branch "$TAG" --resolve-deps "$app" || bench get-app --resolve-deps "$app"
+        else
+            bench get-app --resolve-deps "$app" || bench get-app "$app"
+        fi
     fi
 done
 
