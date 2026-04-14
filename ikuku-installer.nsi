@@ -8,7 +8,15 @@
     !define VARIANT "lite"
 !endif
 
-Name "ikuku - Frappe on Windows"
+; White-label defaults (overridden by /DWLTITLE etc.)
+!ifndef WLTITLE
+    !define WLTITLE "ikuku - Frappe on Windows"
+!endif
+!ifndef WLCOMPANY
+    !define WLCOMPANY "ikuku"
+!endif
+
+Name "${WLTITLE}"
 OutFile "ikuku-${VARIANT}.exe"
 InstallDir "$PROGRAMFILES64\ikuku"
 RequestExecutionLevel admin
@@ -138,9 +146,9 @@ Section "Install"
 
     ; Always create uninstaller so failed installs can be cleaned up
     WriteUninstaller "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "ikuku - Frappe on Windows"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "${WLTITLE}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "ikuku"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "${WLCOMPANY}"
 
     ; Run installer with selected apps
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
