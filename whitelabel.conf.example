@@ -12,6 +12,7 @@ WEBSITE=https://acme.com
 # Installer branding
 INSTALLER_TITLE=ERPNext by Acme Solutions
 INSTALLER_TAGLINE=Enterprise Resource Planning — evaluate on your own machine
+EXE_NAME=acme-erpnext
 
 # Default apps to pre-select (comma-separated: wiki,lms,erpnext,crm)
 DEFAULT_APPS=wiki,erpnext

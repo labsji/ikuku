@@ -24,6 +24,7 @@ if (Test-Path $confFile) {
     if ($conf.CONTACT_EMAIL) { $wlArgs += " /DWLEMAIL=`"$($conf.CONTACT_EMAIL)`"" }
     if ($conf.CONTACT_PHONE) { $wlArgs += " /DWLPHONE=`"$($conf.CONTACT_PHONE)`"" }
     if ($conf.WEBSITE) { $wlArgs += " /DWLWEBSITE=`"$($conf.WEBSITE)`"" }
+    if ($conf.EXE_NAME) { $wlArgs += " /DWLEXENAME=`"$($conf.EXE_NAME)`"" }
     Write-Host "  Brand: $($conf.INSTALLER_TITLE)" -ForegroundColor Cyan
 }
 
@@ -32,6 +33,6 @@ Write-Host $cmd
 Invoke-Expression $cmd
 if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
 
-$outFile = "ikuku-$Variant.exe"
+$outFile = if ($conf -and $conf.EXE_NAME) { "$($conf.EXE_NAME)-$Variant.exe" } else { "ikuku-$Variant.exe" }
 if (!(Test-Path $outFile)) { throw "Output file $outFile not found" }
 Write-Host "Built: $outFile ($('{0:N1} MB' -f ((Get-Item $outFile).Length / 1MB)))" -ForegroundColor Green

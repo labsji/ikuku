@@ -16,8 +16,12 @@
     !define WLCOMPANY "ikuku"
 !endif
 
+!ifndef WLEXENAME
+    !define WLEXENAME "ikuku"
+!endif
+
 Name "${WLTITLE}"
-OutFile "ikuku-${VARIANT}.exe"
+OutFile "${WLEXENAME}-${VARIANT}.exe"
 InstallDir "$PROGRAMFILES64\ikuku"
 RequestExecutionLevel admin
 
