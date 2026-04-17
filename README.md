@@ -78,12 +78,19 @@ This program will not transfer any information to other networked systems unless
 
 The bundled Frappe applications connect to the Frappe update server to check for updates. See the [Frappe privacy policy](https://frappecloud.com/privacy) for details.
 
-## Code Signing Policy
+## Windows SmartScreen
 
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+The installer is currently unsigned. On first run, Windows SmartScreen will show:
 
-- Committers and reviewers: [labsji](https://github.com/labsji)
-- Approvers: [labsji](https://github.com/labsji)
+> **Windows protected your PC** — Microsoft Defender SmartScreen prevented an unrecognized app from starting.
+
+To proceed: click **More info** → **Run anyway**.
+
+This is normal for open-source software without a code signing certificate. The installer does not modify system files — it sets up WSL2 and runs containers.
+
+## Code Signing
+
+Not yet signed. We are evaluating [Azure Trusted Signing](https://learn.microsoft.com/en-us/azure/trusted-signing/overview) for when it becomes available in our region.
 
 ## License
 
