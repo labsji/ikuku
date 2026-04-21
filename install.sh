@@ -54,14 +54,6 @@ export IKUKU_APPS="$APPS"
 sed -i.bak "s/8000:8000/$PORT:8000/" docker-compose.yml 2>/dev/null || \
     sed -i '' "s/8000:8000/$PORT:8000/" docker-compose.yml  # macOS sed
 
-# Add hosts entries for multi-site
-for host in demo.localhost mvp.localhost; do
-    if ! grep -q "$host" /etc/hosts 2>/dev/null; then
-        echo "Adding $host to /etc/hosts (needs sudo)"
-        echo "127.0.0.1 $host" | sudo tee -a /etc/hosts >/dev/null
-    fi
-done
-
 # Start
 echo "Starting containers..."
 $COMPOSE up -d
@@ -70,8 +62,8 @@ echo ""
 echo "=== ikuku is starting ==="
 echo "This takes a few minutes on first run (building bench + installing apps)."
 echo ""
-echo "  Demo site: http://demo.localhost:$PORT"
-echo "  MVP site:  http://mvp.localhost:$PORT"
+echo "  Demo site: http://localhost:$PORT        (pre-loaded demo data)"
+echo "  MVP site:  http://localhost:$((PORT+1))   (blank — build here)"
 echo "  Login:     Administrator / admin"
 echo ""
 echo "Follow progress: $COMPOSE logs -f frappe"

@@ -23,8 +23,8 @@ Requires podman or docker.
 
 | Site | URL | Purpose |
 |------|-----|---------|
-| Demo | `http://demo.localhost:8000` | Pre-loaded with demo data — show prospects |
-| MVP  | `http://mvp.localhost:8000`  | Blank — build the prospect's config here |
+| Demo | `http://localhost:8000` | Pre-loaded with demo data — show prospects |
+| MVP  | `http://localhost:8001` | Blank — build the prospect's config here |
 
 Login: `Administrator` / `admin`
 

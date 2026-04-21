@@ -102,5 +102,12 @@ bench --site "$MVP_SITE" clear-cache
 # Default site for direct IP access
 bench use "$DEMO_SITE"
 
+# Add second gunicorn for MVP site on port 8001
+if grep -q "^web:" Procfile; then
+    WEB_CMD=$(grep "^web:" Procfile | sed 's/^web: //')
+    MVP_CMD=$(echo "$WEB_CMD" | sed 's/8000/8001/')
+    echo "mvp: FRAPPE_SITE=$MVP_SITE $MVP_CMD" >> Procfile
+fi
+
 bench start
 
