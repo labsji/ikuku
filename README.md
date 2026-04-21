@@ -1,22 +1,32 @@
 # ikuku 🌬️
 
-Frappe apps on Windows — a better experience than Linux.
+Frappe apps on any OS — one installer, pick your apps.
 
-> *ikuku* (Igbo: breeze) — open Windows and let the breeze in.
-
-One installer, one port, pick your apps. No Docker Desktop, no Linux VM, no manual setup.
+> *ikuku* (Igbo: breeze) — open a window and let the breeze in.
 
 ## Quick Start
 
-1. Download `ikuku-lite.exe` from [Releases](../../releases)
-2. Run the installer — check the apps you want:
+### Windows
 
-   ☑ Wiki · ☐ LMS · ☐ ERPNext · ☐ CRM
+Download `ikuku-lite.exe` from [Releases](../../releases), run the installer, check the apps you want.
 
-3. Open `http://localhost:8000`
-4. Login: `Administrator` / `admin`
+### Linux / macOS
 
-All selected apps share one bench, one port, one site.
+```bash
+git clone https://github.com/labsji/ikuku.git && cd ikuku
+bash install.sh --apps "wiki,erpnext"
+```
+
+Requires podman or docker.
+
+### Two sites, one install
+
+| Site | URL | Purpose |
+|------|-----|---------|
+| Demo | `http://demo.localhost:8000` | Pre-loaded with demo data — show prospects |
+| MVP  | `http://mvp.localhost:8000`  | Blank — build the prospect's config here |
+
+Login: `Administrator` / `admin`
 
 ## Apps
 
