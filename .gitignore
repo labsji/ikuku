@@ -3,5 +3,5 @@
 *.msi
 *.appx
 bundle/
-aws/
+aws/codebuild-policy.json
 __pycache__

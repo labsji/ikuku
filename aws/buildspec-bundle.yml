@@ -1,0 +1,21 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - mkdir -p bundle
+      - echo "Pulling container images..."
+      - docker pull mariadb:10.8
+      - docker pull redis:alpine
+      - docker pull frappe/bench:latest
+      - echo "Saving images..."
+      - docker save mariadb:10.8 -o bundle/img-mariadb.tar
+      - docker save redis:alpine -o bundle/img-redis.tar
+      - docker save frappe/bench:latest -o bundle/img-bench-full.tar
+      - echo "Splitting bench image (NSIS 2GB limit)..."
+      - split -b 1G bundle/img-bench-full.tar bundle/img-bench.tar.part
+      - rm bundle/img-bench-full.tar
+      - ls -lh bundle/
+      - echo "Uploading to S3..."
+      - aws s3 sync bundle/ s3://ikuku-releases/bundle/ --delete
+      - echo "Done"
