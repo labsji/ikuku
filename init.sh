@@ -99,6 +99,12 @@ done
 bench --site "$MVP_SITE" set-config developer_mode 1
 bench --site "$MVP_SITE" clear-cache
 
+# --- Seed MVP from REPL file (whitelabel eval kit) ---
+if [ -f /workspace/seed.repl ]; then
+    echo "=== Seeding MVP site from seed.repl ==="
+    bench --site "$MVP_SITE" execute bind.api.execute_file --args '{"path": "/workspace/seed.repl"}'
+fi
+
 # Default site for direct IP access
 bench use "$DEMO_SITE"
 
