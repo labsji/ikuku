@@ -63,4 +63,4 @@ This program runs entirely on your local machine. No data is sent externally. Th
 
 ## License
 
-MIT
+GPL-3.0 — any distribution of modified versions must include source code.
