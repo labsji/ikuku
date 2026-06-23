@@ -2,9 +2,10 @@
 # init.sh - single bench, single site, apps from IKUKU_APPS env var
 # IKUKU_APPS is a comma-separated list. Default: erpnext
 
-APPS="${IKUKU_APPS:-erpnext}"
-SITE="ikuku.localhost"
+APPS="${IKUKU_APPS:-erpnext}"  # SPEC-I02: ERPNext as default
+SITE="ikuku.localhost"        # SPEC-I01: single site
 
+# SPEC-I07: Idempotent — skip if bench already exists
 if [ -d "/home/frappe/frappe-bench/apps/frappe" ]; then
     echo "Bench already exists, skipping init"
     cd frappe-bench
@@ -76,7 +77,7 @@ bench --site "$SITE" set-config developer_mode 1
 bench --site "$SITE" clear-cache
 bench use "$SITE"
 
-# Install bind agent (if bundled)
+# SPEC-I04: Install bind agent (if bundled)
 if [ -f /workspace/shared/bind.tar.gz ]; then
     echo "Installing bind agent..."
     cd /home/frappe/frappe-bench/apps && rm -rf bind && mkdir bind && cd bind
@@ -95,7 +96,7 @@ if [ -f /workspace/shared/kiro-cli ]; then
     echo "Kiro CLI installed: $(kiro-cli --version 2>/dev/null || echo 'ready')"
 fi
 
-# Configure LLM provider (ollama — open source, local)
+# SPEC-I05: Configure LLM provider (ollama — open source, local)
 bench --site "$SITE" set-config bind_llm '{"provider": "ollama", "model": "llama3.2"}' --parse
 
 bench start
