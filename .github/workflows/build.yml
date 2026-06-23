@@ -20,6 +20,7 @@ on:
       - 'init.sh'
       - 'docker-compose.yml'
       - 'shared/**'
+      - 'whitelabel.conf'
 
 jobs:
   bundle:
@@ -68,15 +69,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: Fetch bundle
+      - name: Fetch bundle (full variant)
         if: env.VARIANT == 'full'
         run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
+
+      - name: Fetch Kiro CLI + bind
+        run: |
+          New-Item -ItemType Directory -Force -Path shared | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
+          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
 
       - name: Build installer
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant ${{ env.VARIANT }}
 
+      - name: Determine output name
+        id: outname
+        run: |
+          if (Test-Path whitelabel.conf) {
+            $conf = @{}
+            Get-Content whitelabel.conf | ForEach-Object {
+              if ($_ -match '^\s*([A-Z_]+)\s*=\s*(.+)$') { $conf[$Matches[1]] = $Matches[2].Trim() }
+            }
+            $name = if ($conf.EXE_NAME) { "$($conf.EXE_NAME)-${{ env.VARIANT }}" } else { "ikuku-${{ env.VARIANT }}" }
+          } else {
+            $name = "ikuku-${{ env.VARIANT }}"
+          }
+          echo "name=$name" >> $env:GITHUB_OUTPUT
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ikuku-${{ env.VARIANT }}
-          path: ikuku-${{ env.VARIANT }}.exe
+          name: ${{ steps.outname.outputs.name }}
+          path: "*.exe"

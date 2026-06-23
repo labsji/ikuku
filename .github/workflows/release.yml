@@ -14,12 +14,23 @@ jobs:
         run: |
           choco install nsis -y
           echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+      - name: Fetch Kiro CLI + bind
+        run: |
+          New-Item -ItemType Directory -Force -Path shared | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
+          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
       - name: Build lite
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-lite
-          path: ikuku-lite.exe
+          path: "*.exe"
 
   build-full:
     runs-on: windows-latest
@@ -35,12 +46,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
-      - name: Fetch bundle
-        run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
+      - name: Fetch bundle + Kiro CLI + bind
+        run: |
+          New-Item -ItemType Directory -Force -Path shared | Out-Null
+          aws s3 sync s3://ikuku-releases/bundle/ bundle/
+          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
+          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
-        run: Compress-Archive -Path ikuku-full.exe, bundle -DestinationPath ikuku-full.zip
+        run: Compress-Archive -Path *.exe, bundle -DestinationPath ikuku-full.zip
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-full
@@ -63,6 +78,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ikuku-lite.exe
+            *.exe
             ikuku-full.zip
           generate_release_notes: true
