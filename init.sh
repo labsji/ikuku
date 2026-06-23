@@ -95,4 +95,7 @@ if [ -f /workspace/shared/kiro-cli ]; then
     echo "Kiro CLI installed: $(kiro-cli --version 2>/dev/null || echo 'ready')"
 fi
 
+# Configure LLM provider (ollama — open source, local)
+bench --site "$SITE" set-config bind_llm '{"provider": "ollama", "model": "llama3.2"}' --parse
+
 bench start
