@@ -25,7 +25,6 @@ services:
       - .:/workspace
     ports:
       - 8000:8000
-      - 8001:8001
       - 9000:9000
 volumes:
   mariadb-data:

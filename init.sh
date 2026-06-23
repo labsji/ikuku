@@ -1,10 +1,9 @@
 #!/bin/bash
-# init.sh - single bench, multiple apps based on IKUKU_APPS env var
-# IKUKU_APPS is a comma-separated list: "wiki,lms" or just "wiki"
+# init.sh - single bench, single site, apps from IKUKU_APPS env var
+# IKUKU_APPS is a comma-separated list. Default: erpnext
 
-APPS="${IKUKU_APPS:-wiki}"
-DEMO_SITE="demo.localhost"
-MVP_SITE="mvp.localhost"
+APPS="${IKUKU_APPS:-erpnext}"
+SITE="ikuku.localhost"
 
 if [ -d "/home/frappe/frappe-bench/apps/frappe" ]; then
     echo "Bench already exists, skipping init"
@@ -43,7 +42,7 @@ get_release_tag() {
     curl -sf "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4
 }
 
-# Install each selected app (once per bench, shared across sites)
+# Install each selected app
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
     app=$(echo "$app" | xargs)
@@ -61,9 +60,7 @@ for app in "${APP_LIST[@]}"; do
     fi
 done
 
-# --- Site 1: Demo (pre-loaded with demo data) ---
-echo "=== Creating demo site: $DEMO_SITE ==="
-bench new-site "$DEMO_SITE" \
+bench new-site "$SITE" \
     --force \
     --mariadb-root-password 123 \
     --admin-password admin \
@@ -71,49 +68,12 @@ bench new-site "$DEMO_SITE" \
 
 for app in "${APP_LIST[@]}"; do
     app=$(echo "$app" | xargs)
-    bench --site "$DEMO_SITE" install-app "$app"
+    echo "Installing app: $app"
+    bench --site "$SITE" install-app "$app"
 done
 
-# Enable demo data if ERPNext is installed
-if echo "$APPS" | grep -qw "erpnext"; then
-    bench --site "$DEMO_SITE" execute erpnext.setup.demo.setup_demo_data 2>/dev/null || \
-    echo "Demo data setup skipped (run setup wizard first)"
-fi
-
-bench --site "$DEMO_SITE" set-config developer_mode 1
-bench --site "$DEMO_SITE" clear-cache
-
-# --- Site 2: MVP (blank, for building prospect's config) ---
-echo "=== Creating MVP site: $MVP_SITE ==="
-bench new-site "$MVP_SITE" \
-    --force \
-    --mariadb-root-password 123 \
-    --admin-password admin \
-    --no-mariadb-socket
-
-for app in "${APP_LIST[@]}"; do
-    app=$(echo "$app" | xargs)
-    bench --site "$MVP_SITE" install-app "$app"
-done
-
-bench --site "$MVP_SITE" set-config developer_mode 1
-bench --site "$MVP_SITE" clear-cache
-
-# --- Seed MVP from REPL file (whitelabel eval kit) ---
-if [ -f /workspace/seed.repl ]; then
-    echo "=== Seeding MVP site from seed.repl ==="
-    bench --site "$MVP_SITE" execute bind.api.execute_file --args '{"path": "/workspace/seed.repl"}'
-fi
-
-# Default site for direct IP access
-bench use "$DEMO_SITE"
-
-# Add second gunicorn for MVP site on port 8001
-if grep -q "^web:" Procfile; then
-    WEB_CMD=$(grep "^web:" Procfile | sed 's/^web: //')
-    MVP_CMD=$(echo "$WEB_CMD" | sed 's/8000/8001/')
-    echo "mvp: FRAPPE_SITE=$MVP_SITE $MVP_CMD" >> Procfile
-fi
+bench --site "$SITE" set-config developer_mode 1
+bench --site "$SITE" clear-cache
+bench use "$SITE"
 
 bench start
-
