@@ -83,8 +83,11 @@ if [ -f /workspace/shared/bind.tar.gz ]; then
     cd /home/frappe/frappe-bench/apps && rm -rf bind
     mkdir bind && cd bind && tar xzf /workspace/shared/bind.tar.gz
     cd /home/frappe/frappe-bench
-    env/bin/pip install -q -e apps/bind 2>/dev/null
-    grep -q bind sites/apps.txt || echo bind >> sites/apps.txt
+    # Symlink into virtualenv (pip install -e unreliable on Python 3.14)
+    PYVER=$(ls env/lib/ | head -1)
+    ln -sf /home/frappe/frappe-bench/apps/bind/bind "env/lib/$PYVER/site-packages/bind"
+    # Register app
+    printf "\nbind\n" >> sites/apps.txt
     bench --site "$SITE" install-app bind 2>&1 | tail -1
     bench --site "$SITE" migrate 2>&1 | tail -1
 fi
