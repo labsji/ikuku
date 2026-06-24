@@ -80,10 +80,10 @@ bench use "$SITE"
 # SPEC-I04: Install bind agent (if bundled)
 if [ -f /workspace/shared/bind.tar.gz ]; then
     echo "Installing bind agent..."
-    cd /home/frappe/frappe-bench/apps && rm -rf bind && mkdir bind && cd bind
-    tar xzf /workspace/shared/bind.tar.gz
+    cd /home/frappe/frappe-bench/apps && rm -rf bind
+    mkdir bind && cd bind && tar xzf /workspace/shared/bind.tar.gz
     cd /home/frappe/frappe-bench
-    pip install -q -e apps/bind 2>/dev/null || ln -sf /home/frappe/frappe-bench/apps/bind/bind /home/frappe/frappe-bench/env/lib/python*/site-packages/bind
+    env/bin/pip install -q -e apps/bind 2>/dev/null
     grep -q bind sites/apps.txt || echo bind >> sites/apps.txt
     bench --site "$SITE" install-app bind 2>&1 | tail -1
     bench --site "$SITE" migrate 2>&1 | tail -1
