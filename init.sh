@@ -99,4 +99,47 @@ fi
 # SPEC-I05: Configure LLM provider (ollama — open source, local)
 bench --site "$SITE" set-config bind_llm '{"provider": "ollama", "model": "llama3.2"}' --parse
 
+# Setup training repo in local gitea (first boot only)
+if [ ! -f /workspace/.training-init-done ]; then
+    echo "Setting up training repo in gitea..."
+    # Wait for gitea to be ready
+    for i in $(seq 1 30); do
+        curl -sf http://gitea:3000/api/v1/version > /dev/null 2>&1 && break
+        sleep 2
+    done
+
+    # Create admin user + training repo via gitea API
+    curl -sf http://gitea:3000/api/v1/admin/users -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"username":"trainer","password":"trainer123","email":"trainer@local","must_change_password":false}' \
+        > /dev/null 2>&1 || true
+
+    curl -sf http://gitea:3000/api/v1/user/repos \
+        -u "trainer:trainer123" -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"name":"next-sale","auto_init":true,"default_branch":"main"}' \
+        > /dev/null 2>&1 || true
+
+    # Clone and populate with tutorials (from bundled or GitHub)
+    cd /tmp
+    if [ -f /workspace/shared/next-sale.bundle ]; then
+        git clone /workspace/shared/next-sale.bundle next-sale
+    elif [ -f /workspace/shared/next-sale.tar.gz ]; then
+        mkdir next-sale && cd next-sale && tar xzf /workspace/shared/next-sale.tar.gz && git init && git add -A && git commit -m "init" && cd /tmp
+    else
+        git clone https://github.com/labsji/next-sale.git next-sale 2>/dev/null || mkdir -p next-sale
+    fi
+
+    if [ -d /tmp/next-sale/.git ]; then
+        cd /tmp/next-sale
+        git remote remove origin 2>/dev/null || true
+        git remote add origin http://trainer:trainer123@gitea:3000/trainer/next-sale.git
+        git push -u origin main 2>/dev/null || git push -u origin master 2>/dev/null || true
+    fi
+
+    rm -rf /tmp/next-sale
+    touch /workspace/.training-init-done
+    echo "Training repo ready at http://localhost:3000/trainer/next-sale"
+fi
+
 bench start

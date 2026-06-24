@@ -14,17 +14,33 @@ services:
       - mariadb-data:/var/lib/mysql
   redis:
     image: redis:alpine
+  gitea:
+    image: gitea/gitea:latest-rootless
+    environment:
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__DOMAIN=localhost
+      - GITEA__security__INSTALL_LOCK=true
+    volumes:
+      - gitea-data:/var/lib/gitea
+    ports:
+      - 3000:3000
   frappe:
     image: frappe/bench:latest
     command: bash /workspace/init.sh
     environment:
       - SHELL=/bin/bash
-      - IKUKU_APPS=${IKUKU_APPS:-wiki}
+      - IKUKU_APPS=${IKUKU_APPS:-erpnext}
     working_dir: /home/frappe
     volumes:
       - .:/workspace
     ports:
       - 8000:8000
       - 9000:9000
+    depends_on:
+      - mariadb
+      - redis
+      - gitea
 volumes:
   mariadb-data:
+  gitea-data:
