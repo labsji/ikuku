@@ -134,5 +134,15 @@ Write-Host "Login: Administrator / admin"
 Write-Host ""
 Write-Host "IMPORTANT: First startup takes 5-10 minutes while apps are compiled." -ForegroundColor Yellow
 Write-Host "Refresh the browser if you see a blank page or connection error." -ForegroundColor Yellow
+
+# Setup .bashrc autostart hook in WSL2
+if ($WSL) {
+    $bashrcLine = "source /opt/ikuku/autostart.sh"
+    & $WSL -u root -- bash -c "cp /opt/ikuku/autostart.sh /opt/ikuku/autostart.sh 2>/dev/null; grep -q 'autostart.sh' /home/*/.bashrc 2>/dev/null || echo '$bashrcLine' >> `$(ls -d /home/*/)[0].bashrc 2>/dev/null || true"
+    & $WSL -- bash -c "grep -q 'ikuku/autostart' ~/.bashrc 2>/dev/null || echo '# ikuku training hook' >> ~/.bashrc && echo 'source $IKUKU_DIR/autostart.sh' >> ~/.bashrc" 2>$null
+    Write-Host ""
+    Write-Host "Training: open WSL2 terminal and type 'train'" -ForegroundColor Cyan
+}
+
 Write-Host ""
 Write-Host ("To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1") -ForegroundColor DarkGray
