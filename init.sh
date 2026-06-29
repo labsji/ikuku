@@ -86,9 +86,14 @@ if [ ! -f /usr/local/bin/kiro-cli ]; then
 fi
 
 echo "Installing bind (kiro-layer)..."
-bench get-app --branch kiro-layer https://github.com/labsji/bind.git || true
+curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/bind/bind.tar.gz" -o /tmp/bind.tar.gz
+cd /home/frappe/frappe-bench/apps && rm -rf bind && mkdir bind && cd bind && tar xzf /tmp/bind.tar.gz
+cd /home/frappe/frappe-bench
+PYVER=$(ls env/lib/ | grep python | head -1)
+ln -sf /home/frappe/frappe-bench/apps/bind/bind "env/lib/$PYVER/site-packages/bind"
+grep -q '^bind$' sites/apps.txt || printf '%s\n' bind >> sites/apps.txt
 bench --site "$SITE" install-app bind || true
-bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse
+bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
 bench --site "$SITE" migrate
 
 bench start
