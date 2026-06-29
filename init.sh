@@ -103,26 +103,32 @@ mkdir -p /home/frappe/.ikuku
 echo "$AUTH_ENDPOINT" > /home/frappe/.ikuku/endpoint
 
 if [ ! -f /home/frappe/.ikuku/token ]; then
-    # Read OTP from ikuku.conf (baked by evalKit) or env
-    IKUKU_OTP="${IKUKU_OTP:-}"
-    if [ -z "$IKUKU_OTP" ] && [ -f /workspace/ikuku.conf ]; then
-        IKUKU_OTP=$(grep -E '^ACTIVATION_CODE=' /workspace/ikuku.conf | cut -d= -f2 | tr -d ' \r')
+    # Read codes from ikuku.conf (comma-separated) or env
+    CODES="${IKUKU_OTP:-}"
+    if [ -z "$CODES" ] && [ -f /workspace/ikuku.conf ]; then
+        CODES=$(grep -E '^ACTIVATION_CODE(S)?=' /workspace/ikuku.conf | tail -1 | cut -d= -f2 | tr -d ' \r')
     fi
-    if [ -n "$IKUKU_OTP" ]; then
+    if [ -n "$CODES" ]; then
         MACHINE_ID=$(cat /etc/machine-id 2>/dev/null || hostname | sha256sum | cut -d' ' -f1)
         INSTALL_ID="${IKUKU_INSTALL_ID:-ikuku-$(hostname)}"
-        RESULT=$(curl -sf "$AUTH_ENDPOINT/register" -H "Content-Type: application/json" \
-            -d "{\"otp\":\"$IKUKU_OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"$INSTALL_ID\"}")
-        TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
-        if [ -n "$TOKEN" ]; then
-            echo "$TOKEN" > /home/frappe/.ikuku/token
-            chmod 600 /home/frappe/.ikuku/token
-            echo "✓ Kiro activated"
-        else
-            echo "⚠ Activation failed — code may be expired or already used"
-        fi
+        IFS=',' read -ra OTP_LIST <<< "$CODES"
+        for OTP in "${OTP_LIST[@]}"; do
+            OTP=$(echo "$OTP" | tr -d ' ')
+            [ -z "$OTP" ] && continue
+            RESULT=$(curl -sf "$AUTH_ENDPOINT/register" -H "Content-Type: application/json" \
+                -d "{\"otp\":\"$OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"$INSTALL_ID\"}" 2>/dev/null || echo "")
+            TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                echo "$TOKEN" > /home/frappe/.ikuku/token
+                chmod 600 /home/frappe/.ikuku/token
+                echo "✓ Kiro activated"
+                break
+            fi
+            echo "  Code failed, trying next..."
+        done
+        [ ! -f /home/frappe/.ikuku/token ] && echo "⚠ All activation codes failed. Run manually: kiro-cli login --use-device-flow"
     else
-        echo "⚠ No activation code found. Add ACTIVATION_CODE to ikuku.conf or run: kiro-cli login --use-device-flow"
+        echo "⚠ No activation codes found. Add ACTIVATION_CODES to ikuku.conf or run: kiro-cli login --use-device-flow"
     fi
 fi
 

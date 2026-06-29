@@ -6,7 +6,8 @@
 # After registration, the code is consumed and cannot be reused.
 
 # Kiro activation (required for AI agent)
-ACTIVATION_CODE=
+# Multiple codes for retry if one is expired/used. Comma-separated.
+ACTIVATION_CODES=
 
 # Prospect info (used by seed.repl loader)
 PROSPECT_NAME=
