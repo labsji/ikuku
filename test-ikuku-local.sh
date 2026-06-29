@@ -31,7 +31,7 @@ case "$MODE" in
   activate)
     # Test just the activation section — no bench, no mariadb needed
     echo "=== Testing activation flow ==="
-    $CTR run --rm -it \
+    $CTR run --rm \
       -v "$IKUKU_DIR:/workspace" \
       --name "$CONTAINER_NAME" \
       ubuntu:24.04 bash -c '
@@ -49,7 +49,7 @@ case "$MODE" in
   quick)
     # Test kiro-cli install + bind extraction (no bench/erpnext)
     echo "=== Quick test: kiro + bind install ==="
-    $CTR run --rm -it \
+    $CTR run --rm \
       -v "$IKUKU_DIR:/workspace" \
       --name "$CONTAINER_NAME" \
       ubuntu:24.04 bash -c '
