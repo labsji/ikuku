@@ -75,6 +75,8 @@ Write-Host "Setting up Frappe in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR"
 $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim()
 & $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/init.sh > $IKUKU_DIR/init.sh.tmp; mv $IKUKU_DIR/init.sh.tmp $IKUKU_DIR/init.sh"
+# Copy ikuku.conf if present (contains activation code baked by evalKit)
+& $WSL -u root -- bash -c "[ -f '$wslScript/ikuku.conf' ] && cp '$wslScript/ikuku.conf' $IKUKU_DIR/ && tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp && mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf || true"
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
 

@@ -136,6 +136,7 @@ Section "Install"
     File "ikuku.ico"
     File "progress.py"
     File "progress.html"
+    File /nonfatal "ikuku.conf"
 
     ; Shared scripts
     SetOutPath "$INSTDIR\shared"
