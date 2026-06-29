@@ -96,5 +96,28 @@ bench --site "$SITE" install-app bind || true
 bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
 bench --site "$SITE" migrate
 
+# --- Kiro activation (headless via auth proxy) ---
+AUTH_ENDPOINT="https://auth.next.skith.in"
+mkdir -p /home/frappe/.ikuku
+echo "$AUTH_ENDPOINT" > /home/frappe/.ikuku/endpoint
+
+if [ ! -f /home/frappe/.ikuku/token ]; then
+    MACHINE_ID=$(cat /etc/machine-id 2>/dev/null || hostname | sha256sum | cut -d' ' -f1)
+    if [ -n "${IKUKU_OTP:-}" ]; then
+        RESULT=$(curl -sf "$AUTH_ENDPOINT/register" -H "Content-Type: application/json" \
+            -d "{\"otp\":\"$IKUKU_OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"ikuku-$(hostname)\"}")
+        TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
+        if [ -n "$TOKEN" ]; then
+            echo "$TOKEN" > /home/frappe/.ikuku/token
+            chmod 600 /home/frappe/.ikuku/token
+            echo "✓ Kiro activated (headless)"
+        else
+            echo "⚠ Kiro activation failed — run manually: kiro-cli login --use-device-flow"
+        fi
+    else
+        echo "⚠ No IKUKU_OTP set — kiro not activated. Set IKUKU_OTP in .env or activate manually."
+    fi
+fi
+
 bench start
 
