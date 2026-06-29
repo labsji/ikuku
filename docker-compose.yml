@@ -26,5 +26,7 @@ services:
     ports:
       - 8000:8000
       - 9000:9000
+      - 2718:2718
+      - 7681:7681
 volumes:
   mariadb-data:
