@@ -97,25 +97,32 @@ bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/fr
 bench --site "$SITE" migrate
 
 # --- Kiro activation (headless via auth proxy) ---
+# OTP baked by reseller via evalKit.sh into ikuku.conf alongside the exe
 AUTH_ENDPOINT="https://auth.next.skith.in"
 mkdir -p /home/frappe/.ikuku
 echo "$AUTH_ENDPOINT" > /home/frappe/.ikuku/endpoint
 
 if [ ! -f /home/frappe/.ikuku/token ]; then
-    MACHINE_ID=$(cat /etc/machine-id 2>/dev/null || hostname | sha256sum | cut -d' ' -f1)
-    if [ -n "${IKUKU_OTP:-}" ]; then
+    # Read OTP from ikuku.conf (baked by evalKit) or env
+    IKUKU_OTP="${IKUKU_OTP:-}"
+    if [ -z "$IKUKU_OTP" ] && [ -f /workspace/ikuku.conf ]; then
+        IKUKU_OTP=$(grep -E '^ACTIVATION_CODE=' /workspace/ikuku.conf | cut -d= -f2 | tr -d ' \r')
+    fi
+    if [ -n "$IKUKU_OTP" ]; then
+        MACHINE_ID=$(cat /etc/machine-id 2>/dev/null || hostname | sha256sum | cut -d' ' -f1)
+        INSTALL_ID="${IKUKU_INSTALL_ID:-ikuku-$(hostname)}"
         RESULT=$(curl -sf "$AUTH_ENDPOINT/register" -H "Content-Type: application/json" \
-            -d "{\"otp\":\"$IKUKU_OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"ikuku-$(hostname)\"}")
+            -d "{\"otp\":\"$IKUKU_OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"$INSTALL_ID\"}")
         TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
         if [ -n "$TOKEN" ]; then
             echo "$TOKEN" > /home/frappe/.ikuku/token
             chmod 600 /home/frappe/.ikuku/token
-            echo "✓ Kiro activated (headless)"
+            echo "✓ Kiro activated"
         else
-            echo "⚠ Kiro activation failed — run manually: kiro-cli login --use-device-flow"
+            echo "⚠ Activation failed — code may be expired or already used"
         fi
     else
-        echo "⚠ No IKUKU_OTP set — kiro not activated. Set IKUKU_OTP in .env or activate manually."
+        echo "⚠ No activation code found. Add ACTIVATION_CODE to ikuku.conf or run: kiro-cli login --use-device-flow"
     fi
 fi
 
