@@ -19,7 +19,7 @@ services:
     command: bash /workspace/init.sh
     environment:
       - SHELL=/bin/bash
-      - IKUKU_APPS=${IKUKU_APPS:-wiki}
+      - IKUKU_APPS=${IKUKU_APPS:-erpnext}
     working_dir: /home/frappe
     volumes:
       - .:/workspace

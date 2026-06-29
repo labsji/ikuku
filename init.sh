@@ -77,5 +77,19 @@ bench --site "$SITE" set-config developer_mode 1
 bench --site "$SITE" clear-cache
 bench use "$SITE"
 
+# --- Kiro layer: install kiro-cli + bind with kiro provider ---
+echo "Installing kiro-cli..."
+if [ ! -f /usr/local/bin/kiro-cli ]; then
+    curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/kiro/kiro-cli" -o /usr/local/bin/kiro-cli
+    curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/kiro/kiro-cli-chat" -o /usr/local/bin/kiro-cli-chat
+    chmod +x /usr/local/bin/kiro-cli /usr/local/bin/kiro-cli-chat
+fi
+
+echo "Installing bind (kiro-layer)..."
+bench get-app --branch kiro-layer https://github.com/labsji/bind.git || true
+bench --site "$SITE" install-app bind || true
+bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse
+bench --site "$SITE" migrate
+
 bench start
 
