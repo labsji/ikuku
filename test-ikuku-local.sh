@@ -53,11 +53,10 @@ case "$MODE" in
       -v "$IKUKU_DIR:/workspace" \
       --name "$CONTAINER_NAME" \
       ubuntu:24.04 bash -c '
-        apt-get update -qq && apt-get install -y -qq curl python3 > /dev/null 2>&1
-        echo "--- Testing kiro-cli download ---"
-        curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/kiro/kiro-cli" -o /usr/local/bin/kiro-cli && chmod +x /usr/local/bin/kiro-cli && kiro-cli --version || echo "KIRO DOWNLOAD FAILED (expected without public S3)"
+        echo "--- Testing kiro-cli from bundle ---"
+        cp /workspace/shared/kiro-cli /usr/local/bin/kiro-cli && chmod +x /usr/local/bin/kiro-cli && kiro-cli --version || echo "KIRO INSTALL FAILED"
         echo "--- Testing bind extraction ---"
-        curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/bind/bind.tar.gz" -o /tmp/bind.tar.gz && mkdir -p /opt/bind && cd /opt/bind && tar xzf /tmp/bind.tar.gz && ls bind/denote/notebook_app.py && echo "BIND OK" || echo "BIND DOWNLOAD FAILED (expected without public S3)"
+        mkdir -p /opt/bind && cd /opt/bind && tar xzf /workspace/shared/bind.tar.gz && ls bind/denote/notebook_app.py && echo "BIND OK" || echo "BIND EXTRACTION FAILED"
         echo "--- Testing activation ---"
         export HOME=/home/frappe; mkdir -p /home/frappe
         sed -n "/^# --- Kiro activation/,/^fi$/p" /workspace/init.sh | bash

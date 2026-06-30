@@ -8,7 +8,70 @@ SITE="ikuku.localhost"
 if [ -d "/home/frappe/frappe-bench/apps/frappe" ]; then
     echo "Bench already exists, skipping init"
     cd frappe-bench
+    # Ensure hosts point to compose service names (not build-time names)
+    bench set-mariadb-host mariadb
+    bench set-redis-cache-host redis://redis:6379
+    bench set-redis-queue-host redis://redis:6379
+    bench set-redis-socketio-host redis://redis:6379
+
+    # If mariadb is fresh (no site DB), recreate the site
+    SITE="ikuku.localhost"
+    SITE_DB=$(python3 -c "import json;print(json.load(open('sites/$SITE/site_config.json')).get('db_name',''))" 2>/dev/null)
+    # Wait for mariadb to be ready
+    for i in $(seq 1 30); do
+        env/bin/python -c "import MySQLdb; MySQLdb.connect(host='mariadb',user='root',passwd='123')" 2>/dev/null && break
+        sleep 2
+    done
+    # Check if site DB exists
+    DB_EXISTS=$(env/bin/python -c "
+import MySQLdb
+conn = MySQLdb.connect(host='mariadb',user='root',passwd='123')
+cur = conn.cursor()
+cur.execute('SHOW DATABASES')
+dbs = [r[0] for r in cur.fetchall()]
+print('yes' if '$SITE_DB' in dbs else 'no')
+" 2>/dev/null || echo "no")
+    if [ "$DB_EXISTS" = "no" ] && [ -n "$SITE_DB" ]; then
+        echo "Site DB '$SITE_DB' missing (fresh mariadb). Recreating site..."
+        bench new-site "$SITE" --force --mariadb-root-password 123 --admin-password admin --no-mariadb-socket
+        for app in $(cat sites/apps.txt | grep -v frappe); do
+            bench --site "$SITE" install-app "$app" 2>/dev/null || true
+        done
+        bench --site "$SITE" set-config developer_mode 1
+        bench use "$SITE"
+    fi
+
+    # --- Kiro layer (idempotent — install if not already present) ---
+    if [ -f /workspace/shared/kiro-cli ] && [ ! -f /home/frappe/.local/bin/kiro-cli ]; then
+        echo "Installing kiro-cli..."
+        mkdir -p /home/frappe/.local/bin
+        cp /workspace/shared/kiro-cli /home/frappe/.local/bin/kiro-cli
+        cp /workspace/shared/kiro-cli-chat /home/frappe/.local/bin/kiro-cli-chat
+        chmod +x /home/frappe/.local/bin/kiro-cli /home/frappe/.local/bin/kiro-cli-chat
+        export PATH="/home/frappe/.local/bin:$PATH"
+    fi
+    if [ -f /workspace/shared/bind.tar.gz ] && [ ! -d apps/bind ]; then
+        echo "Installing bind..."
+        cd apps && rm -rf bind && mkdir bind && cd bind && tar xzf /workspace/shared/bind.tar.gz && cd ../..
+        PYVER=$(ls env/lib/ | grep python | head -1)
+        ln -sf /home/frappe/frappe-bench/apps/bind/bind "env/lib/$PYVER/site-packages/bind"
+        [ -n "$(tail -c1 sites/apps.txt)" ] && echo >> sites/apps.txt
+        grep -q '^bind$' sites/apps.txt || printf '%s\n' bind >> sites/apps.txt
+        bench --site "$SITE" install-app bind || true
+        bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
+        bench --site "$SITE" migrate
+    fi
+
+    # --- Training content ---
+    if [ ! -d /home/frappe/next-sale ] && [ -f /workspace/shared/next-sale.bundle ]; then
+        echo "Cloning training content from bundle..."
+        git clone /workspace/shared/next-sale.bundle /home/frappe/next-sale
+        cd /home/frappe/next-sale && git checkout tutor-main 2>/dev/null || true
+        cd /home/frappe/frappe-bench
+    fi
+
     bench start
+    exit 0
 else
     echo "Creating new bench..."
 fi
@@ -78,19 +141,23 @@ bench --site "$SITE" clear-cache
 bench use "$SITE"
 
 # --- Kiro layer: install kiro-cli + bind with kiro provider ---
+# All binaries bundled in /workspace/shared/ by the NSIS installer — no runtime downloads.
 echo "Installing kiro-cli..."
-if [ ! -f /usr/local/bin/kiro-cli ]; then
-    curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/kiro/kiro-cli" -o /usr/local/bin/kiro-cli
-    curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/kiro/kiro-cli-chat" -o /usr/local/bin/kiro-cli-chat
-    chmod +x /usr/local/bin/kiro-cli /usr/local/bin/kiro-cli-chat
+if [ ! -f /home/frappe/.local/bin/kiro-cli ]; then
+    mkdir -p /home/frappe/.local/bin
+    cp /workspace/shared/kiro-cli /home/frappe/.local/bin/kiro-cli
+    cp /workspace/shared/kiro-cli-chat /home/frappe/.local/bin/kiro-cli-chat
+    chmod +x /home/frappe/.local/bin/kiro-cli /home/frappe/.local/bin/kiro-cli-chat
 fi
+export PATH="/home/frappe/.local/bin:$PATH"
 
 echo "Installing bind (kiro-layer)..."
-curl -sfL "https://ikuku-releases.s3.ap-south-1.amazonaws.com/bind/bind.tar.gz" -o /tmp/bind.tar.gz
-cd /home/frappe/frappe-bench/apps && rm -rf bind && mkdir bind && cd bind && tar xzf /tmp/bind.tar.gz
+cd /home/frappe/frappe-bench/apps && rm -rf bind && mkdir bind && cd bind && tar xzf /workspace/shared/bind.tar.gz
 cd /home/frappe/frappe-bench
 PYVER=$(ls env/lib/ | grep python | head -1)
 ln -sf /home/frappe/frappe-bench/apps/bind/bind "env/lib/$PYVER/site-packages/bind"
+# Ensure apps.txt ends with newline before appending
+[ -n "$(tail -c1 sites/apps.txt)" ] && echo >> sites/apps.txt
 grep -q '^bind$' sites/apps.txt || printf '%s\n' bind >> sites/apps.txt
 bench --site "$SITE" install-app bind || true
 bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
@@ -132,5 +199,13 @@ if [ ! -f /home/frappe/.ikuku/token ]; then
     fi
 fi
 
+# --- Training content (next-sale from bundled git bundle) ---
+if [ ! -d /home/frappe/next-sale ] && [ -f /workspace/shared/next-sale.bundle ]; then
+    echo "Cloning training content from bundle..."
+    git clone /workspace/shared/next-sale.bundle /home/frappe/next-sale
+    cd /home/frappe/next-sale && git checkout tutor-main 2>/dev/null || true
+fi
+
+cd /home/frappe/frappe-bench
 bench start
 

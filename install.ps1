@@ -67,7 +67,7 @@ $hasBundle = Test-Path "$bundleDir\img-mariadb.tar"
 if ($hasBundle) {
     Write-Host "Loading container images (offline)..."
     $wslBundle = (& $WSL -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
-    & $WSL -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load"
+    & $WSL -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load; podman tag ikuku-bench:fresh docker.io/frappe/bench:latest"
 }
 
 # Step 2: Copy docker config into WSL with selected apps
@@ -75,6 +75,9 @@ Write-Host "Setting up Frappe in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR"
 $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim()
 & $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/init.sh > $IKUKU_DIR/init.sh.tmp; mv $IKUKU_DIR/init.sh.tmp $IKUKU_DIR/init.sh"
+# Copy shared/ (kiro-cli, bind.tar.gz, next-sale.bundle) — self-contained, no runtime downloads
+$wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim()
+& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/shared && cp '$wslShared/kiro-cli' '$wslShared/kiro-cli-chat' '$wslShared/bind.tar.gz' $IKUKU_DIR/shared/ 2>/dev/null; [ -f '$wslShared/next-sale.bundle' ] && cp '$wslShared/next-sale.bundle' $IKUKU_DIR/shared/ || true"
 # Copy ikuku.conf if present (contains activation code baked by evalKit)
 & $WSL -u root -- bash -c "[ -f '$wslScript/ikuku.conf' ] && cp '$wslScript/ikuku.conf' $IKUKU_DIR/ && tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp && mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf || true"
 # Write selected apps into .env for docker-compose
