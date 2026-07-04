@@ -8,6 +8,9 @@ elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
 # WSL memory config
 @("[wsl2]","memory=${MemoryGB}GB","swap=${SwapGB}GB") | Set-Content "$env:USERPROFILE\.wslconfig"
 
+# Ensure WSL2 is the default (critical for multi-user scenarios)
+& $WSL --set-default-version 2 2>$null
+
 # Ensure Ubuntu
 $distros = & $WSL -l -q 2>&1 | Out-String
 if ($distros -notmatch "Ubuntu") {
