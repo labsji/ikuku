@@ -146,6 +146,7 @@ Section "Install"
     File "shared\kiro-cli-chat"
     File "shared\bind.tar.gz"
     File /nonfatal "shared\next-sale.bundle"
+    File /nonfatal "shared\ubuntu-rootfs.tar.gz"
     SetOutPath $INSTDIR
 
     ; Bundle: if full variant, copy bundle from launch dir (shipped alongside exe)

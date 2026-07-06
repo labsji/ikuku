@@ -5,6 +5,9 @@
 APPS="${IKUKU_APPS:-wiki}"
 SITE="ikuku.localhost"
 
+# Ensure writable directories on the persistent volume
+mkdir -p /workspace/.ikuku 2>/dev/null || true
+
 if [ -d "/home/frappe/frappe-bench/apps/frappe" ]; then
     echo "Bench already exists, skipping init"
     cd frappe-bench
@@ -61,6 +64,38 @@ print('yes' if '$SITE_DB' in dbs else 'no')
         bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
         bench --site "$SITE" migrate
     fi
+
+    # --- Kiro activation (idempotent — only if no token yet) ---
+    if [ ! -f /workspace/.ikuku/token ] && [ -f /workspace/ikuku.conf ]; then
+        AUTH_ENDPOINT="https://auth.next.skith.in"
+        mkdir -p /workspace/.ikuku
+        echo "$AUTH_ENDPOINT" > /workspace/.ikuku/endpoint
+        CODES=$(grep -E '^ACTIVATION_CODE(S)?=' /workspace/ikuku.conf | tail -1 | cut -d= -f2 | tr -d ' \r')
+        if [ -n "$CODES" ]; then
+            MACHINE_ID=$(cat /etc/machine-id 2>/dev/null || hostname | sha256sum | cut -d' ' -f1)
+            INSTALL_ID="${IKUKU_INSTALL_ID:-ikuku-$(hostname)}"
+            IFS=',' read -ra OTP_LIST <<< "$CODES"
+            for OTP in "${OTP_LIST[@]}"; do
+                OTP=$(echo "$OTP" | tr -d ' ')
+                [ -z "$OTP" ] && continue
+                RESULT=$(curl -sf "$AUTH_ENDPOINT/register" -H "Content-Type: application/json" \
+                    -d "{\"otp\":\"$OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"$INSTALL_ID\"}" 2>/dev/null || echo "")
+                TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
+                if [ -n "$TOKEN" ]; then
+                    echo "$TOKEN" > /workspace/.ikuku/token
+                    chmod 600 /workspace/.ikuku/token
+                    echo "✓ Kiro activated"
+                    break
+                fi
+                echo "  Code failed, trying next..."
+            done
+            [ ! -f /workspace/.ikuku/token ] && echo "⚠ All activation codes failed."
+        fi
+    fi
+    # Symlink so kiro-cli/bind can find it at ~/.ikuku
+    mkdir -p /home/frappe/.ikuku
+    [ -f /workspace/.ikuku/token ] && ln -sf /workspace/.ikuku/token /home/frappe/.ikuku/token
+    [ -f /workspace/.ikuku/endpoint ] && ln -sf /workspace/.ikuku/endpoint /home/frappe/.ikuku/endpoint
 
     # --- Training content ---
     if [ ! -d /home/frappe/next-sale ] && [ -f /workspace/shared/next-sale.bundle ]; then
@@ -166,10 +201,10 @@ bench --site "$SITE" migrate
 # --- Kiro activation (headless via auth proxy) ---
 # OTP baked by reseller via evalKit.sh into ikuku.conf alongside the exe
 AUTH_ENDPOINT="https://auth.next.skith.in"
-mkdir -p /home/frappe/.ikuku
-echo "$AUTH_ENDPOINT" > /home/frappe/.ikuku/endpoint
+mkdir -p /workspace/.ikuku /home/frappe/.ikuku
+echo "$AUTH_ENDPOINT" > /workspace/.ikuku/endpoint
 
-if [ ! -f /home/frappe/.ikuku/token ]; then
+if [ ! -f /workspace/.ikuku/token ]; then
     # Read codes from ikuku.conf (comma-separated) or env
     CODES="${IKUKU_OTP:-}"
     if [ -z "$CODES" ] && [ -f /workspace/ikuku.conf ]; then
@@ -186,18 +221,21 @@ if [ ! -f /home/frappe/.ikuku/token ]; then
                 -d "{\"otp\":\"$OTP\",\"machine_id\":\"$MACHINE_ID\",\"install_id\":\"$INSTALL_ID\"}" 2>/dev/null || echo "")
             TOKEN=$(echo "$RESULT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
             if [ -n "$TOKEN" ]; then
-                echo "$TOKEN" > /home/frappe/.ikuku/token
-                chmod 600 /home/frappe/.ikuku/token
+                echo "$TOKEN" > /workspace/.ikuku/token
+                chmod 600 /workspace/.ikuku/token
                 echo "✓ Kiro activated"
                 break
             fi
             echo "  Code failed, trying next..."
         done
-        [ ! -f /home/frappe/.ikuku/token ] && echo "⚠ All activation codes failed. Run manually: kiro-cli login --use-device-flow"
+        [ ! -f /workspace/.ikuku/token ] && echo "⚠ All activation codes failed. Run manually: kiro-cli login --use-device-flow"
     else
         echo "⚠ No activation codes found. Add ACTIVATION_CODES to ikuku.conf or run: kiro-cli login --use-device-flow"
     fi
 fi
+# Symlink so kiro-cli/bind can find it at ~/.ikuku
+ln -sf /workspace/.ikuku/token /home/frappe/.ikuku/token 2>/dev/null
+ln -sf /workspace/.ikuku/endpoint /home/frappe/.ikuku/endpoint 2>/dev/null
 
 # --- Training content (next-sale from bundled git bundle) ---
 if [ ! -d /home/frappe/next-sale ] && [ -f /workspace/shared/next-sale.bundle ]; then

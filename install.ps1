@@ -34,16 +34,20 @@ $wslCheck = & $WSL --status 2>&1 | Out-String
 if ($wslCheck -match "not supported|not enabled") {
     $errors += "WSL2 is not available on this system."
 }
-# Check distro version
+# Check if any distro is running WSL1 (only matters if distros exist)
 $wslVersion = & $WSL -l -v 2>&1 | Out-String
-if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2") {
+if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2" -and $wslVersion -notmatch "no installed") {
     $errors += "WSL is running in version 1 mode. WSL2 required."
 }
 # Smoke-test: can podman actually create containers with networking?
+# Only test if podman is already installed (skip on fresh install — wsl-setup.ps1 handles it)
 if ($errors.Count -eq 0) {
-    $nsTest = & $WSL -u root -- bash -c "podman run --rm alpine echo ok 2>&1" | Out-String
-    if ($nsTest -notmatch "ok") {
-        $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
+    $hasPodman = & $WSL -u root -- which podman 2>&1 | Out-String
+    if ($hasPodman -match "/podman") {
+        $nsTest = & $WSL -u root -- bash -c "podman run --rm alpine echo ok 2>&1" | Out-String
+        if ($nsTest -notmatch "ok") {
+            $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
+        }
     }
 }
 } # end WSL found
@@ -82,6 +86,9 @@ $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim(
 & $WSL -u root -- bash -c "[ -f '$wslScript/ikuku.conf' ] && cp '$wslScript/ikuku.conf' $IKUKU_DIR/ && tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp && mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf || true"
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
+
+# Copy autostart.sh + start-local.sh and wire into .bashrc
+& $WSL -u root -- bash -c "cp '$wslScript/autostart.sh' '$wslScript/start-local.sh' $IKUKU_DIR/ 2>/dev/null; chmod +x $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh 2>/dev/null; grep -q 'autostart.sh' /root/.bashrc 2>/dev/null || echo 'source $IKUKU_DIR/autostart.sh' >> /root/.bashrc"
 
 # Step 3: Register startup task
 Write-Host "Registering startup task..."

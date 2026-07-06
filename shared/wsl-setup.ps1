@@ -11,18 +11,49 @@ elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
 # Ensure WSL2 is the default (critical for multi-user scenarios)
 & $WSL --set-default-version 2 2>$null
 
-# Ensure Ubuntu
+# Ensure Ubuntu distro exists
 $distros = & $WSL -l -q 2>&1 | Out-String
 if ($distros -notmatch "Ubuntu") {
     Write-Host "Installing Ubuntu..."
-    & $WSL --install Ubuntu --no-launch
-    $ubuntuExe = (Get-AppxPackage *Ubuntu*).InstallLocation + "\ubuntu.exe"
-    if (Test-Path $ubuntuExe) { & $ubuntuExe install --root }
+
+    # Method 1: Try wsl --install (works on Win10/11 with Store access)
+    $installResult = & $WSL --install -d Ubuntu --no-launch 2>&1 | Out-String
+    Start-Sleep 5
+    $distros = & $WSL -l -q 2>&1 | Out-String
+
+    # Method 2: If --install failed, use rootfs import (works on Server)
+    if ($distros -notmatch "Ubuntu") {
+        Write-Host "Store install failed. Using rootfs import..."
+        $rootfs = "$env:TEMP\ubuntu-rootfs.tar.gz"
+        # Check bundled locations first (no download needed)
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        $bundledPaths = @(
+            (Join-Path $scriptDir "ubuntu-rootfs.tar.gz"),
+            "C:\Users\Public\ubuntu-rootfs.tar.gz",
+            (Join-Path $scriptDir "..\shared\ubuntu-rootfs.tar.gz")
+        )
+        foreach ($p in $bundledPaths) {
+            if (Test-Path $p) { $rootfs = $p; Write-Host "  Using bundled rootfs: $p"; break }
+        }
+        if (!(Test-Path $rootfs)) {
+            Write-Host "  Downloading Ubuntu rootfs..."
+            curl.exe -sL -o $rootfs "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.3-base-amd64.tar.gz"
+        }
+        if (Test-Path $rootfs) {
+            $wslDir = "C:\WSL\Ubuntu"
+            New-Item -ItemType Directory -Path $wslDir -Force | Out-Null
+            & $WSL --import Ubuntu $wslDir $rootfs
+            & $WSL --set-default Ubuntu
+            Write-Host "  Ubuntu imported via rootfs."
+        } else {
+            Write-Host "  ERROR: Could not download Ubuntu rootfs."
+        }
+    }
 }
 
 # Ensure podman
 $podmanCheck = & $WSL -u root -- which podman 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing podman..."
-    & $WSL -u root -- bash -c "apt-get update && apt-get install -y podman podman-compose > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [\"docker.io\"]' >> /etc/containers/registries.conf"
+    & $WSL -u root -- bash -c "apt-get update -qq && apt-get install -y -qq podman podman-compose curl git > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [""docker.io""]' >> /etc/containers/registries.conf && echo PODMAN_OK"
 }
