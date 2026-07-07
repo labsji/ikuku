@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - '!*-kiro'
 
 jobs:
   build-lite:
@@ -14,23 +15,22 @@ jobs:
         run: |
           choco install nsis -y
           echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
-      - name: Fetch Kiro CLI + bind
+      - name: Fetch bind (open-source)
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
-          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
+          Invoke-WebRequest -Uri "https://github.com/labsji/bind/releases/latest/download/bind.tar.gz" -OutFile shared/bind.tar.gz
+          if (!(Test-Path shared/bind.tar.gz) -or (Get-Item shared/bind.tar.gz).Length -lt 1000) {
+            Write-Host "Release asset not found, building from source..."
+            Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile /tmp/bind-src.tar.gz
+            tar xzf /tmp/bind-src.tar.gz -C /tmp/
+            tar czf shared/bind.tar.gz -C /tmp/bind-main bind/
+          }
       - name: Build lite
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-lite
-          path: "*.exe"
+          path: ikuku-lite.exe
 
   build-full:
     runs-on: windows-latest
@@ -46,16 +46,20 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
-      - name: Fetch bundle + Kiro CLI + bind
+      - name: Fetch bundle + bind
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
           aws s3 sync s3://ikuku-releases/bundle/ bundle/
-          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
-          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
+          Invoke-WebRequest -Uri "https://github.com/labsji/bind/releases/latest/download/bind.tar.gz" -OutFile shared/bind.tar.gz
+          if (!(Test-Path shared/bind.tar.gz) -or (Get-Item shared/bind.tar.gz).Length -lt 1000) {
+            Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile /tmp/bind-src.tar.gz
+            tar xzf /tmp/bind-src.tar.gz -C /tmp/
+            tar czf shared/bind.tar.gz -C /tmp/bind-main bind/
+          }
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
-        run: Compress-Archive -Path *.exe, bundle -DestinationPath ikuku-full.zip
+        run: Compress-Archive -Path ikuku-full.exe, bundle -DestinationPath ikuku-full.zip
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-full
@@ -78,6 +82,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            *.exe
+            ikuku-lite.exe
             ikuku-full.zip
           generate_release_notes: true
