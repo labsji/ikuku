@@ -87,6 +87,9 @@ $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim(
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
 
+# Pre-create .ikuku directory with write permissions for frappe user (UID 1000)
+& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/.ikuku && chmod 777 $IKUKU_DIR/.ikuku"
+
 # Copy autostart.sh + start-local.sh and wire into .bashrc
 & $WSL -u root -- bash -c "cp '$wslScript/autostart.sh' '$wslScript/start-local.sh' $IKUKU_DIR/ 2>/dev/null; chmod +x $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh 2>/dev/null; grep -q 'autostart.sh' /root/.bashrc 2>/dev/null || echo 'source $IKUKU_DIR/autostart.sh' >> /root/.bashrc"
 
