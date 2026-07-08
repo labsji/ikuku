@@ -15,16 +15,16 @@ jobs:
         run: |
           choco install nsis -y
           echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Fetch bind (open-source)
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+      - name: Fetch bind
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/labsji/erpnext-bind/releases/latest/download/bind.tar.gz" -OutFile shared/bind.tar.gz
-          if (!(Test-Path shared/bind.tar.gz) -or (Get-Item shared/bind.tar.gz).Length -lt 1000) {
-            Write-Host "Release asset not found, building from source..."
-            Invoke-WebRequest -Uri "https://github.com/labsji/erpnext-bind/archive/refs/heads/main.tar.gz" -OutFile /tmp/bind-src.tar.gz
-            tar xzf /tmp/bind-src.tar.gz -C /tmp/
-            tar czf shared/bind.tar.gz -C /tmp/bind-main bind/
-          }
+          aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
       - name: Build lite
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
       - uses: actions/upload-artifact@v4
@@ -50,12 +50,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
           aws s3 sync s3://ikuku-releases/bundle/ bundle/
-          Invoke-WebRequest -Uri "https://github.com/labsji/erpnext-bind/releases/latest/download/bind.tar.gz" -OutFile shared/bind.tar.gz
-          if (!(Test-Path shared/bind.tar.gz) -or (Get-Item shared/bind.tar.gz).Length -lt 1000) {
-            Invoke-WebRequest -Uri "https://github.com/labsji/erpnext-bind/archive/refs/heads/main.tar.gz" -OutFile /tmp/bind-src.tar.gz
-            tar xzf /tmp/bind-src.tar.gz -C /tmp/
-            tar czf shared/bind.tar.gz -C /tmp/bind-main bind/
-          }
+          aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
