@@ -19,6 +19,17 @@ def poll_logs():
     start_time = time.time()
     while not status["ready"]:
         try:
+            # Check if container exists yet
+            check = subprocess.run(["podman", "ps", "-a", "--filter", f"name={CONTAINER}", "--format", "{{.Status}}"],
+                                   capture_output=True, text=True, timeout=10)
+            if not check.stdout.strip():
+                status["phase"] = "waiting_containers"
+                status["lines"] = ["Waiting for containers to start...",
+                                   "This may take a minute on first boot.",
+                                   f"Elapsed: {int(time.time() - start_time)}s"]
+                time.sleep(5)
+                continue
+
             r = subprocess.run(["podman", "logs", "--tail", "30", CONTAINER], capture_output=True, text=True, timeout=15)
             full = r.stdout + r.stderr
             lines = full.strip().split("\n")[-30:]

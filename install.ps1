@@ -118,6 +118,11 @@ cd /opt/ikuku
 exec python3 progress.py 8080' > $IKUKU_DIR/start-progress.sh; chmod +x $IKUKU_DIR/start-progress.sh" 2>&1 | Out-Null
 Set-Content "$scriptDir\start-progress.bat" "@echo off`r`n`"$WSL`" -u root -e bash /opt/ikuku/start-progress.sh"
 Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c `"$scriptDir\start-progress.bat`""
+
+# Step 7: Start containers (so progress.py can monitor them)
+Write-Host "Starting containers (first boot — this pulls images and takes 5-10 min)..."
+& $WSL -u root -- bash -c "cd $IKUKU_DIR && podman-compose up -d 2>&1 | tail -5"
+
 Start-Sleep 3
 $wslIp = (& $WSL -u root -- hostname -I).Trim().Split(' ')[0]
 netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp 2>&1 | Out-Null

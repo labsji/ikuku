@@ -24,6 +24,9 @@ if ($distros -notmatch "Ubuntu") {
     # Method 2: If --install failed, use rootfs import (works on Server)
     if ($distros -notmatch "Ubuntu") {
         Write-Host "Store install failed. Using rootfs import..."
+        # Ensure WSL2 kernel is installed (required before import can work)
+        Write-Host "  Ensuring WSL2 kernel is present..."
+        & $WSL --update 2>$null
         $rootfs = "$env:TEMP\ubuntu-rootfs.tar.gz"
         # Check bundled locations first (no download needed)
         $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
