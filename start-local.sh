@@ -59,7 +59,7 @@ Begin immediately with the Reseller Niche Discovery conversation. Do NOT ask set
 - One question at a time, conversational tone
 - NEVER ask about infrastructure, deployment, servers, or setup — it's all done
 - Adapt all tutorial content to the student's chosen niche
-- Replace any references to erp.next.skith.in with http://localhost:8000
+- Replace any remote ERPNext URL references with http://localhost:8000
 - Track progress in PROGRESS.md (git commit after each tutorial)
 - You are teaching a commerce graduate who is new to ERPNext
 INSTRUCTIONS
@@ -69,8 +69,9 @@ INSTRUCTIONS
 KIRO_API_KEY=""
 TOKEN_FILE="/opt/ikuku/.ikuku/token"
 ENDPOINT_FILE="/opt/ikuku/.ikuku/endpoint"
+DEFAULT_AUTH_ENDPOINT="${IKUKU_AUTH_ENDPOINT:-https://auth.next.skith.in}"
 if [ -f "$TOKEN_FILE" ]; then
-    ENDPOINT=$(cat "$ENDPOINT_FILE" 2>/dev/null || echo "https://auth.next.skith.in")
+    ENDPOINT=$(cat "$ENDPOINT_FILE" 2>/dev/null || echo "$DEFAULT_AUTH_ENDPOINT")
     TOKEN=$(cat "$TOKEN_FILE")
     KIRO_API_KEY=$(curl -sf "$ENDPOINT/refresh" -H "Content-Type: application/json" \
         -d "{\"token\":\"$TOKEN\"}" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('kiro_api_key',''))" 2>/dev/null || echo "")

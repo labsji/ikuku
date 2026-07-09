@@ -67,7 +67,9 @@ print('yes' if '$SITE_DB' in dbs else 'no')
 
     # --- Kiro activation (idempotent — only if no token yet) ---
     if [ ! -f /workspace/.ikuku/token ] && [ -f /workspace/ikuku.conf ]; then
-        AUTH_ENDPOINT="https://auth.next.skith.in"
+        # AUTH_ENDPOINT: ikuku.conf → env var → default
+        AUTH_ENDPOINT=$(grep -E '^AUTH_ENDPOINT=' /workspace/ikuku.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')
+        AUTH_ENDPOINT="${AUTH_ENDPOINT:-${IKUKU_AUTH_ENDPOINT:-https://auth.next.skith.in}}"
         mkdir -p /workspace/.ikuku
         echo "$AUTH_ENDPOINT" > /workspace/.ikuku/endpoint
         CODES=$(grep -E '^ACTIVATION_CODE(S)?=' /workspace/ikuku.conf | tail -1 | cut -d= -f2 | tr -d ' \r')
@@ -200,7 +202,9 @@ bench --site "$SITE" migrate
 
 # --- Kiro activation (headless via auth proxy) ---
 # OTP baked by reseller via evalKit.sh into ikuku.conf alongside the exe
-AUTH_ENDPOINT="https://auth.next.skith.in"
+# AUTH_ENDPOINT: ikuku.conf → env var → default
+AUTH_ENDPOINT=$(grep -E '^AUTH_ENDPOINT=' /workspace/ikuku.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')
+AUTH_ENDPOINT="${AUTH_ENDPOINT:-${IKUKU_AUTH_ENDPOINT:-https://auth.next.skith.in}}"
 mkdir -p /workspace/.ikuku /home/frappe/.ikuku
 echo "$AUTH_ENDPOINT" > /workspace/.ikuku/endpoint
 

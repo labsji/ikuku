@@ -16,3 +16,8 @@ COUNTRY=India
 
 # Install ID (for tracking — defaults to hostname if empty)
 INSTALL_ID=
+
+# Auth endpoint for Kiro activation and token refresh.
+# Defaults to https://auth.next.skith.in if not set.
+# Can also be overridden via IKUKU_AUTH_ENDPOINT env var.
+AUTH_ENDPOINT=
