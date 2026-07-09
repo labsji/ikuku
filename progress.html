@@ -43,11 +43,13 @@ h1{font-size:1.3em;margin-bottom:4px;color:#333}
 </div>
 <script>
 const phases = {
+  waiting_containers: {text:"Waiting for containers to start...", pct:2},
   starting: {text:"Starting containers...", pct:5},
   initializing: {text:"Initializing bench...", pct:15},
   installing_apps: {text:"Installing Frappe apps...", pct:35},
   building_assets: {text:"Building frontend assets...", pct:60},
   creating_site: {text:"Creating site & database...", pct:80},
+  activating_kiro: {text:"Activating Kiro AI agent...", pct:90},
   ready: {text:"Ready!", pct:100},
   error: {text:"Error encountered", pct:0}
 };

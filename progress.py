@@ -51,6 +51,8 @@ def poll_logs():
                     status["phase"] = "creating_site"
                 elif "bench init" in full or "Creating new bench" in full:
                     status["phase"] = "initializing"
+                elif "Kiro activated" in full or "Installing bind" in full:
+                    status["phase"] = "activating_kiro"
                 else:
                     status["phase"] = "starting"
         except Exception as e:
