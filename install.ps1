@@ -120,9 +120,10 @@ Write-Host "Starting containers (first boot — this pulls images and takes 5-10
 
 # Step 8: Open WSL terminal with Kiro
 Write-Host "Opening Kiro terminal..."
-Start-Process "wt.exe" -ArgumentList "wsl.exe -u root -- bash /opt/ikuku/activate.sh" -ErrorAction SilentlyContinue
-if ($LASTEXITCODE -ne 0 -or !(Get-Command wt.exe -ErrorAction SilentlyContinue)) {
-    # Fallback: open cmd with wsl if Windows Terminal not available
+$hasWT = Get-Command wt.exe -ErrorAction SilentlyContinue
+if ($hasWT) {
+    Start-Process "wt.exe" -ArgumentList "wsl.exe -u root -- bash /opt/ikuku/activate.sh" -ErrorAction SilentlyContinue
+} else {
     Start-Process "cmd.exe" -ArgumentList "/c wsl.exe -u root -- bash /opt/ikuku/activate.sh"
 }
 
