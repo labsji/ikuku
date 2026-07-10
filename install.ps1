@@ -108,20 +108,23 @@ powercfg /change hibernate-timeout-dc 0
 netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=$($conf.LMS_PORT)
 netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow protocol=TCP localport=8080
 
-# Step 6: Copy progress files and start progress server (non-fatal)
-$ErrorActionPreference = "Continue"
-Write-Host "Starting progress monitor..."
-& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/" 2>&1 | Out-Null
-& $WSL -u root -- bash -c "echo '#!/bin/bash
-mkdir -p /run/user/0
-cd /opt/ikuku
-exec python3 progress.py 8080' > $IKUKU_DIR/start-progress.sh; chmod +x $IKUKU_DIR/start-progress.sh" 2>&1 | Out-Null
-Set-Content "$scriptDir\start-progress.bat" "@echo off`r`n`"$WSL`" -u root -e bash /opt/ikuku/start-progress.sh"
-Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c `"$scriptDir\start-progress.bat`""
+# Step 6: Copy activate.sh and start Kiro engagement in WSL terminal
+Write-Host "Starting containers and Kiro engagement..."
+& $WSL -u root -- bash -c "cp '$wslScript/activate.sh' $IKUKU_DIR/ && chmod +x $IKUKU_DIR/activate.sh"
+# Keep progress page as fallback (accessible at :8080 if needed)
+& $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/ 2>/dev/null" 2>&1 | Out-Null
 
-# Step 7: Start containers (so progress.py can monitor them)
+# Step 7: Start containers (background — activate.sh will engage user while this runs)
 Write-Host "Starting containers (first boot — this pulls images and takes 5-10 min)..."
 & $WSL -u root -- bash -c "cd $IKUKU_DIR && podman-compose up -d 2>&1 | tail -5"
+
+# Step 8: Open WSL terminal with Kiro
+Write-Host "Opening Kiro terminal..."
+Start-Process "wt.exe" -ArgumentList "wsl.exe -u root -- bash /opt/ikuku/activate.sh" -ErrorAction SilentlyContinue
+if ($LASTEXITCODE -ne 0 -or !(Get-Command wt.exe -ErrorAction SilentlyContinue)) {
+    # Fallback: open cmd with wsl if Windows Terminal not available
+    Start-Process "cmd.exe" -ArgumentList "/c wsl.exe -u root -- bash /opt/ikuku/activate.sh"
+}
 
 Start-Sleep 3
 $wslIp = (& $WSL -u root -- hostname -I).Trim().Split(' ')[0]
