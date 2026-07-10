@@ -81,14 +81,14 @@ $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim(
 & $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/init.sh > $IKUKU_DIR/init.sh.tmp; mv $IKUKU_DIR/init.sh.tmp $IKUKU_DIR/init.sh"
 # Copy shared/ (kiro-cli, bind.tar.gz, next-sale.bundle) — self-contained, no runtime downloads
 $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim()
-& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/shared && cp '$wslShared/kiro-cli' '$wslShared/kiro-cli-chat' '$wslShared/bind.tar.gz' $IKUKU_DIR/shared/ 2>/dev/null; [ -f '$wslShared/next-sale.bundle' ] && cp '$wslShared/next-sale.bundle' $IKUKU_DIR/shared/ || true"
+& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/shared; cp '$wslShared/kiro-cli' '$wslShared/kiro-cli-chat' '$wslShared/bind.tar.gz' $IKUKU_DIR/shared/ 2>/dev/null; if [ -f '$wslShared/next-sale.bundle' ]; then cp '$wslShared/next-sale.bundle' $IKUKU_DIR/shared/; fi"
 # Copy ikuku.conf if present (contains activation code baked by evalKit)
-& $WSL -u root -- bash -c "[ -f '$wslScript/ikuku.conf' ] && cp '$wslScript/ikuku.conf' $IKUKU_DIR/ && tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp && mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf || true"
+& $WSL -u root -- bash -c "if [ -f '$wslScript/ikuku.conf' ]; then cp '$wslScript/ikuku.conf' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp 2>/dev/null; mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf 2>/dev/null; fi"
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
 
 # Pre-create .ikuku directory with write permissions for frappe user (UID 1000)
-& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/.ikuku && chmod 777 $IKUKU_DIR/.ikuku"
+& $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/.ikuku; chmod 777 $IKUKU_DIR/.ikuku"
 
 # Copy autostart.sh + start-local.sh and wire into .bashrc
 & $WSL -u root -- bash -c "cp '$wslScript/autostart.sh' '$wslScript/start-local.sh' $IKUKU_DIR/ 2>/dev/null; chmod +x $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh 2>/dev/null; grep -q 'autostart.sh' /root/.bashrc 2>/dev/null || echo 'source $IKUKU_DIR/autostart.sh' >> /root/.bashrc"
@@ -110,13 +110,13 @@ netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow pr
 
 # Step 6: Copy activate.sh and start Kiro engagement in WSL terminal
 Write-Host "Starting containers and Kiro engagement..."
-& $WSL -u root -- bash -c "cp '$wslScript/activate.sh' $IKUKU_DIR/ && chmod +x $IKUKU_DIR/activate.sh"
+& $WSL -u root -- bash -c "cp '$wslScript/activate.sh' $IKUKU_DIR/; chmod +x $IKUKU_DIR/activate.sh"
 # Keep progress page as fallback (accessible at :8080 if needed)
 & $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/ 2>/dev/null" 2>&1 | Out-Null
 
 # Step 7: Start containers (background — activate.sh will engage user while this runs)
 Write-Host "Starting containers (first boot — this pulls images and takes 5-10 min)..."
-& $WSL -u root -- bash -c "cd $IKUKU_DIR && podman-compose up -d 2>&1 | tail -5"
+& $WSL -u root -- bash -c "cd $IKUKU_DIR; podman-compose up -d 2>&1 | tail -5"
 
 # Step 8: Open WSL terminal with Kiro
 Write-Host "Opening Kiro terminal..."

@@ -13,7 +13,7 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 
 # Clean stale containers then start fresh
-& $WSL -u root -- bash -c "cd $IKUKU_DIR && podman-compose down 2>/dev/null; podman-compose up -d"
+& $WSL -u root -- bash -c "cd $IKUKU_DIR; podman-compose down 2>/dev/null; podman-compose up -d"
 
 # Wait for HTTP 200
 for ($i = 0; $i -lt 30; $i++) {

@@ -15,7 +15,7 @@ schtasks /end /tn "ikuku" 2>$null
 schtasks /delete /tn "ikuku" /f 2>$null
 
 Write-Host "Stopping containers..."
-& $WSL -u root -- bash -c "cd /opt/ikuku && podman-compose down -v 2>/dev/null"
+& $WSL -u root -- bash -c "cd /opt/ikuku; podman-compose down -v 2>/dev/null"
 
 Write-Host "Removing port proxy and firewall rule..."
 netsh interface portproxy delete v4tov4 listenport=$Port listenaddress=0.0.0.0 2>$null
