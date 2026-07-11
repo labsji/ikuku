@@ -1,4 +1,4 @@
-# build-installer.ps1 — Build ikuku installer (supports white-label)
+# build-installer.ps1 - Build ikuku installer (supports white-label)
 param([ValidateSet("lite","full")][string]$Variant = "lite")
 
 $ErrorActionPreference = "Stop"

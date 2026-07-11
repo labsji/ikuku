@@ -40,7 +40,7 @@ if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2" -a
     $errors += "WSL is running in version 1 mode. WSL2 required."
 }
 # Smoke-test: can podman actually create containers with networking?
-# Only test if podman is already installed (skip on fresh install — wsl-setup.ps1 handles it)
+# Only test if podman is already installed (skip on fresh install - wsl-setup.ps1 handles it)
 if ($errors.Count -eq 0) {
     $hasPodman = & $WSL -u root -- which podman 2>&1 | Out-String
     if ($hasPodman -match "/podman") {
@@ -79,7 +79,7 @@ Write-Host "Setting up Frappe in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR"
 $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim()
 & $WSL -u root -- bash -c "cp '$wslScript/docker-compose.yml' '$wslScript/init.sh' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/init.sh > $IKUKU_DIR/init.sh.tmp; mv $IKUKU_DIR/init.sh.tmp $IKUKU_DIR/init.sh"
-# Copy shared/ (kiro-cli, bind.tar.gz, next-sale.bundle) — self-contained, no runtime downloads
+# Copy shared/ (kiro-cli, bind.tar.gz, next-sale.bundle) - self-contained, no runtime downloads
 $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim()
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/shared; cp '$wslShared/kiro-cli' '$wslShared/kiro-cli-chat' '$wslShared/bind.tar.gz' $IKUKU_DIR/shared/ 2>/dev/null; if [ -f '$wslShared/next-sale.bundle' ]; then cp '$wslShared/next-sale.bundle' $IKUKU_DIR/shared/; fi"
 # Copy ikuku.conf if present (contains activation code baked by evalKit)
@@ -114,8 +114,8 @@ Write-Host "Starting containers and Kiro engagement..."
 # Keep progress page as fallback (accessible at :8080 if needed)
 & $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/ 2>/dev/null" 2>&1 | Out-Null
 
-# Step 7: Start containers (background — activate.sh will engage user while this runs)
-Write-Host "Starting containers (first boot — this pulls images and takes 5-10 min)..."
+# Step 7: Start containers (background - activate.sh will engage user while this runs)
+Write-Host "Starting containers (first boot - this pulls images and takes 5-10 min)..."
 & $WSL -u root -- bash -c "cd $IKUKU_DIR; podman-compose up -d 2>&1 | tail -5"
 
 # Step 8: Open WSL terminal with Kiro

@@ -1,4 +1,4 @@
-# shared/wsl-setup.ps1 — Common WSL2 + podman setup for all Frappe apps
+# shared/wsl-setup.ps1 - Common WSL2 + podman setup for all Frappe apps
 param([string]$MemoryGB = "12", [string]$SwapGB = "4")
 
 $WSL = $null

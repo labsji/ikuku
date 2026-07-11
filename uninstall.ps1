@@ -1,4 +1,4 @@
-# uninstall.ps1 — Remove ikuku
+# uninstall.ps1 - Remove ikuku
 $WSL = $null
 if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
 elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }

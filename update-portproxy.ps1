@@ -1,4 +1,4 @@
-# update-portproxy.ps1 — Refresh port forwarding (WSL IP changes on reboot)
+# update-portproxy.ps1 - Refresh port forwarding (WSL IP changes on reboot)
 param([string]$Port = "8000")
 
 $WSL = $null

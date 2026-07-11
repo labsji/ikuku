@@ -1,4 +1,4 @@
-# shared/service-setup.ps1 — Register scheduled task for any Frappe app
+# shared/service-setup.ps1 - Register scheduled task for any Frappe app
 param(
     [Parameter(Mandatory)][string]$TaskName,
     [Parameter(Mandatory)][string]$ServiceScript

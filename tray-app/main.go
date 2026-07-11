@@ -62,6 +62,7 @@ var (
 	stateMu    sync.Mutex
 	conf       Config
 	trayConfig *TrayConfig
+	statusText string // last value read from status.txt
 	mStatus    *systray.MenuItem
 	mActivate  *systray.MenuItem
 	mOpenERP   *systray.MenuItem
@@ -128,7 +129,7 @@ func handleClicks() {
 }
 
 func determineState() AppState {
-	// Check status file
+	// Check status file first — it's authoritative
 	data, err := os.ReadFile(statusFile)
 	if err == nil {
 		s := strings.TrimSpace(string(data))
@@ -136,20 +137,17 @@ func determineState() AppState {
 		case "installing":
 			return StateInstalling
 		case "ready":
-			if conf.Token != "" {
-				return StateActive
-			}
 			return StateReady
-		case "error":
-			return StateError
 		case "active":
 			return StateActive
+		case "error":
+			return StateError
 		}
 	}
 
-	// No status file — check if token exists
+	// No status file — use token presence as hint
 	if conf.Token != "" {
-		return StateActive
+		return StateReady // amber — have token but not confirmed running
 	}
 
 	return StateInstalling
@@ -238,20 +236,18 @@ func watchFiles() {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
-	var lastStatus, lastConfig, lastNotify string
+	var lastConfig, lastNotify string
 
 	for range ticker.C {
-		// Watch status.txt
+		// Watch status.txt — always re-read and assert state
 		if data, err := os.ReadFile(statusFile); err == nil {
 			s := strings.TrimSpace(string(data))
-			if s != lastStatus {
-				lastStatus = s
-				loadConfig()
-				newState := determineState()
-				if newState != state {
-					state = newState
-					updateMenu()
-				}
+			statusText = s
+			loadConfig()
+			newState := determineState()
+			if newState != state {
+				state = newState
+				updateMenu()
 			}
 		}
 
@@ -289,17 +285,37 @@ func healthCheck() {
 		time.Sleep(5 * time.Second)
 	}
 
+	// Wait for first successful ping before starting failure detection
+	for {
+		resp, err := http.Get(healthURL)
+		if err == nil && resp.StatusCode == 200 {
+			resp.Body.Close()
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+
 	ticker := time.NewTicker(healthInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if state != StateActive {
+		if state != StateActive && state != StateError {
+			continue
+		}
+		// If status.txt explicitly says "active", don't override to error
+		if statusText == "active" || statusText == "installing" {
+			if state == StateError {
+				state = StateActive
+				updateMenu()
+			}
 			continue
 		}
 		resp, err := http.Get(healthURL)
 		if err != nil || resp.StatusCode != 200 {
-			state = StateError
-			updateMenu()
+			if state != StateError {
+				state = StateError
+				updateMenu()
+			}
 		} else {
 			if state == StateError {
 				state = StateActive
