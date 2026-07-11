@@ -7,7 +7,7 @@ $IKUKU_DIR = "/opt/ikuku"
 
 # Wait for WSL systemd
 for ($i = 0; $i -lt 30; $i++) {
-    $state = & $WSL -u root -- bash -c "systemctl is-system-running 2>/dev/null || echo waiting"
+    $state = & $WSL -u root -- bash -c 'systemctl is-system-running 2>/dev/null || echo waiting'
     if ($state -match "running|degraded") { break }
     Start-Sleep 2
 }
