@@ -22,6 +22,9 @@ if (Test-Path $confFile) {
 }
 
 Write-Host "=== ikuku: Installing Frappe apps ===" -ForegroundColor Cyan
+# Signal tray app: installing
+New-Item -ItemType Directory -Path "C:\ikuku" -Force | Out-Null
+Set-Content -Path "C:\ikuku\status.txt" -Value "installing"
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
 # Step 0: Check WSL2 + container support
@@ -161,3 +164,6 @@ Write-Host "Refresh the browser if you see a blank page or connection error." -F
 Write-Host ""
 $uninstMsg = "To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1"
 Write-Host $uninstMsg -ForegroundColor DarkGray
+
+# Signal tray app: install complete, containers starting
+& $WSL -u root -- bash -c 'echo active > /mnt/c/ikuku/status.txt'
