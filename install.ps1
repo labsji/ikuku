@@ -138,8 +138,8 @@ Write-Host "Refresh the browser if you see a blank page or connection error." -F
 # Setup .bashrc autostart hook in WSL2
 if ($WSL) {
     $bashrcLine = "source /opt/ikuku/autostart.sh"
-    & $WSL -u root -- bash -c "cp /opt/ikuku/autostart.sh /opt/ikuku/autostart.sh 2>/dev/null; grep -q 'autostart.sh' /home/*/.bashrc 2>/dev/null || echo '$bashrcLine' >> `$(ls -d /home/*/)[0].bashrc 2>/dev/null || true"
-    & $WSL -- bash -c "grep -q 'ikuku/autostart' ~/.bashrc 2>/dev/null || echo '# ikuku training hook' >> ~/.bashrc && echo 'source $IKUKU_DIR/autostart.sh' >> ~/.bashrc" 2>$null
+    & $WSL -u root -- bash -c 'if ! grep -q autostart.sh /root/.bashrc 2>/dev/null; then echo "source /opt/ikuku/autostart.sh" >> /root/.bashrc; fi'
+    & $WSL -- bash -c 'if ! grep -q ikuku/autostart ~/.bashrc 2>/dev/null; then echo "# ikuku training hook"; echo "source /opt/ikuku/autostart.sh"; fi >> ~/.bashrc' 2>$null
     Write-Host ""
     Write-Host "Training: open WSL2 terminal and type 'train'" -ForegroundColor Cyan
 }

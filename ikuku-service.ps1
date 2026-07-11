@@ -7,13 +7,13 @@ $IKUKU_DIR = "/opt/ikuku"
 
 # Wait for WSL systemd
 for ($i = 0; $i -lt 30; $i++) {
-    $state = & $WSL -u root -- bash -c "systemctl is-system-running 2>/dev/null || echo waiting"
+    $state = & $WSL -u root -- bash -c 'systemctl is-system-running 2>/dev/null || echo waiting'
     if ($state -match "running|degraded") { break }
     Start-Sleep 2
 }
 
 # Clean stale containers then start fresh
-& $WSL -u root -- bash -c "cd $IKUKU_DIR && podman-compose down 2>/dev/null; podman-compose up -d"
+& $WSL -u root -- bash -c 'cd /opt/ikuku; podman-compose down 2>/dev/null; podman-compose up -d'
 
 # Wait for HTTP 200
 for ($i = 0; $i -lt 30; $i++) {

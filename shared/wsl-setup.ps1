@@ -21,5 +21,6 @@ if ($distros -notmatch "Ubuntu") {
 $podmanCheck = & $WSL -u root -- which podman 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing podman..."
-    & $WSL -u root -- bash -c "apt-get update && apt-get install -y podman podman-compose > /dev/null 2>&1 && sed -i '/^unqualified-search-registries/d' /etc/containers/registries.conf && echo 'unqualified-search-registries = [\"docker.io\"]' >> /etc/containers/registries.conf"
+    $podmanScript = 'apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y podman podman-compose > /dev/null 2>&1; sed -i /^unqualified-search-registries/d /etc/containers/registries.conf; printf ''unqualified-search-registries = ["docker.io"]\n'' >> /etc/containers/registries.conf'
+    & $WSL -u root -- bash -c $podmanScript
 }
