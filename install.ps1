@@ -25,6 +25,18 @@ Write-Host "=== ikuku: Installing Frappe apps ===" -ForegroundColor Cyan
 # Signal tray app: installing
 New-Item -ItemType Directory -Path "C:\ikuku" -Force | Out-Null
 Set-Content -Path "C:\ikuku\status.txt" -Value "installing"
+
+# Start tray app immediately (first thing user sees)
+$trayExe = "C:\ikuku\ikuku-tray.exe"
+if (Test-Path "$scriptDir\ikuku-tray.exe") {
+    Copy-Item "$scriptDir\ikuku-tray.exe" $trayExe -Force
+}
+if (Test-Path $trayExe) {
+    Start-Process $trayExe
+    # Register auto-start on login
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ikuku /t REG_SZ /d $trayExe /f 2>$null
+}
+
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
 # Step 0: Check WSL2 + container support
