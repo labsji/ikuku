@@ -147,9 +147,10 @@ echo ""
 
 cd "$IKUKU_DIR"
 if [ -n "$KIRO_CLI" ] && echo "$KIRO_CLI" | grep -q "podman"; then
-    # Copy instructions into container
-    podman exec --user root ikuku_frappe_1 mkdir -p /home/frappe/.kiro 2>/dev/null
+    # Copy instructions into container and fix permissions
+    podman exec --user root ikuku_frappe_1 bash -c "mkdir -p /home/frappe/.kiro; chown -R frappe:frappe /home/frappe/.kiro" 2>/dev/null
     podman cp "$IKUKU_DIR/.kiro/instructions.md" ikuku_frappe_1:/home/frappe/.kiro/instructions.md 2>/dev/null
+    podman exec --user root ikuku_frappe_1 chown frappe:frappe /home/frappe/.kiro/instructions.md 2>/dev/null
     # Run inside container with initial greeting prompt
     podman exec -it \
         -e KIRO_API_KEY="$KIRO_API_KEY" \
