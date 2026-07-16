@@ -25,6 +25,8 @@ jobs:
           aws s3 cp s3://ikuku-releases/kiro/kiro-cli shared/kiro-cli
           aws s3 cp s3://ikuku-releases/kiro/kiro-cli-chat shared/kiro-cli-chat
           aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
+      - name: Fetch tray app binary
+        run: aws s3 cp s3://ikuku-releases/tray/ikuku-tray.exe ikuku-tray.exe
       - name: Build lite
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
       - uses: actions/upload-artifact@v4
@@ -53,6 +55,8 @@ jobs:
           aws s3 cp s3://ikuku-releases/kiro/kiro-cli shared/kiro-cli
           aws s3 cp s3://ikuku-releases/kiro/kiro-cli-chat shared/kiro-cli-chat
           aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
+      - name: Fetch tray app binary
+        run: aws s3 cp s3://ikuku-releases/tray/ikuku-tray.exe ikuku-tray.exe
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
