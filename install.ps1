@@ -106,7 +106,7 @@ $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim(
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/.ikuku; chmod 777 $IKUKU_DIR/.ikuku"
 
 # Copy autostart.sh + start-local.sh and wire into .bashrc
-& $WSL -u root -- bash -c "cp '$wslScript/autostart.sh' '$wslScript/start-local.sh' $IKUKU_DIR/ 2>/dev/null; chmod +x $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh 2>/dev/null; if ! grep -q autostart.sh /root/.bashrc 2>/dev/null; then echo 'source $IKUKU_DIR/autostart.sh' >> /root/.bashrc; fi"
+& $WSL -u root -- bash -c "cp '$wslScript/autostart.sh' '$wslScript/start-local.sh' $IKUKU_DIR/ 2>/dev/null; sed -i 's/\r//' $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh; chmod +x $IKUKU_DIR/autostart.sh $IKUKU_DIR/start-local.sh 2>/dev/null; if ! grep -q autostart.sh /root/.bashrc 2>/dev/null; then echo 'source $IKUKU_DIR/autostart.sh' >> /root/.bashrc; fi"
 
 # Step 3: Register startup task
 Write-Host "Registering startup task..."
@@ -125,7 +125,7 @@ netsh advfirewall firewall add rule name="ikuku-progress" dir=in action=allow pr
 
 # Step 6: Copy activate.sh and start Kiro engagement in WSL terminal
 Write-Host "Starting containers and Kiro engagement..."
-& $WSL -u root -- bash -c "cp '$wslScript/activate.sh' $IKUKU_DIR/; chmod +x $IKUKU_DIR/activate.sh"
+& $WSL -u root -- bash -c "cp '$wslScript/activate.sh' $IKUKU_DIR/; sed -i 's/\r//' $IKUKU_DIR/activate.sh; chmod +x $IKUKU_DIR/activate.sh"
 # Keep progress page as fallback (accessible at :8080 if needed)
 & $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/ 2>/dev/null" 2>&1 | Out-Null
 
