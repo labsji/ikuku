@@ -17,15 +17,26 @@ h1{font-size:1.3em;margin-bottom:4px;color:#333}
 .bar-fill{height:100%;background:#1a73e8;border-radius:3px;transition:width .5s}
 .bar-fill.error{background:#d32f2f}
 .bar-fill.ready{background:#2e7d32}
-.logs{background:#1e1e1e;color:#d4d4d4;font-family:'Cascadia Code',Consolas,'Courier New',monospace;font-size:.85em;padding:20px;border-radius:8px;height:400px;overflow-y:auto;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.logs{background:#1e1e1e;color:#d4d4d4;font-family:'Cascadia Code',Consolas,'Courier New',monospace;font-size:.85em;padding:20px;border-radius:8px;height:300px;overflow-y:auto;line-height:1.7;white-space:pre-wrap;word-break:break-all}
 .logs:empty::after{content:"Waiting for container logs...";color:#666}
 .hint{margin-top:16px;padding:12px;background:#fff3e0;border-radius:8px;font-size:.85em;color:#e65100;display:none}
 .hint.show{display:block}
+.kiro-panel{margin-top:20px;padding:20px;background:#e8f5e9;border-radius:10px;border:1px solid #a5d6a7;display:none}
+.kiro-panel.show{display:block}
+.kiro-panel h2{font-size:1em;color:#2e7d32;margin-bottom:8px}
+.kiro-panel p{font-size:.9em;color:#333;margin-bottom:12px;line-height:1.5}
+.kiro-panel .cmd{background:#1e1e1e;color:#4fc3f7;font-family:'Cascadia Code',Consolas,monospace;padding:12px 16px;border-radius:6px;font-size:.9em;cursor:pointer;position:relative;user-select:all}
+.kiro-panel .cmd:hover{background:#263238}
+.kiro-panel .cmd::after{content:"📋 click to copy";position:absolute;right:12px;top:12px;color:#888;font-size:.75em;font-family:system-ui}
+.kiro-panel .note{font-size:.8em;color:#666;margin-top:8px}
 .ready-msg{margin-top:20px;text-align:center;display:none}
 .ready-msg.show{display:block}
-.ready-msg a{display:inline-block;padding:14px 40px;background:#1a73e8;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:1.1em}
+.ready-msg .buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.ready-msg a{display:inline-block;padding:14px 32px;background:#1a73e8;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:1em}
 .ready-msg a:hover{background:#1557b0}
-.ready-msg p{margin-top:10px;color:#666;font-size:.9em}
+.ready-msg a.secondary{background:#fff;color:#1a73e8;border:2px solid #1a73e8}
+.ready-msg a.secondary:hover{background:#e3f2fd}
+.ready-msg p{margin-top:12px;color:#666;font-size:.9em}
 </style>
 </head>
 <body>
@@ -36,21 +47,37 @@ h1{font-size:1.3em;margin-bottom:4px;color:#333}
   <div class="bar"><div class="bar-fill" id="bar" style="width:5%"></div></div>
   <div class="logs" id="logs"></div>
   <div class="hint" id="hint"></div>
+
+  <div class="kiro-panel" id="kiro-panel">
+    <h2>✨ Kiro AI is ready — start chatting while setup finishes</h2>
+    <p>Open a <strong>WSL terminal</strong> (search "Ubuntu" in Start menu) and paste:</p>
+    <div class="cmd" id="kiro-cmd" onclick="copyCmd()">podman exec -it ikuku_frappe_1 /home/frappe/.local/bin/kiro-cli chat</div>
+    <p class="note">Kiro can help with setup issues, answer questions about ERPNext, or start your training. The browser setup continues in the background.</p>
+  </div>
+
   <div class="ready-msg" id="ready">
-    <a href="http://localhost:8000">Open ikuku</a>
+    <div class="buttons">
+      <a href="http://localhost:8000">Open ERPNext</a>
+      <a href="http://localhost:8000/app/bind-agent" class="secondary">Talk to Kiro</a>
+    </div>
     <p>Login: Administrator / admin</p>
   </div>
 </div>
 <script>
 const phases = {
+  waiting_containers: {text:"Waiting for containers to start...", pct:2},
   starting: {text:"Starting containers...", pct:5},
   initializing: {text:"Initializing bench...", pct:15},
   installing_apps: {text:"Installing Frappe apps...", pct:35},
   building_assets: {text:"Building frontend assets...", pct:60},
   creating_site: {text:"Creating site & database...", pct:80},
+  activating_kiro: {text:"Activating Kiro AI agent...", pct:90},
   ready: {text:"Ready!", pct:100},
   error: {text:"Error encountered", pct:0}
 };
+
+let kiroShown = false;
+
 function update() {
   fetch("/status").then(r=>r.json()).then(d=>{
     const p = phases[d.phase] || phases.starting;
@@ -65,9 +92,23 @@ function update() {
       el("hint").innerHTML = "Error: " + d.error + "<br>Try: <code>powershell -File \"C:\\Program Files\\ikuku\\start.ps1\"</code>";
       el("hint").classList.add("show");
     }
+    // Show Kiro panel once we reach activation phase or beyond
+    if (!kiroShown && (d.phase === "activating_kiro" || d.phase === "creating_site" || d.phase === "ready")) {
+      el("kiro-panel").classList.add("show");
+      kiroShown = true;
+    }
     if (d.ready) { el("ready").classList.add("show"); clearInterval(timer); }
   }).catch(()=>{});
 }
+
+function copyCmd() {
+  const cmd = document.getElementById("kiro-cmd").textContent;
+  navigator.clipboard.writeText(cmd).then(() => {
+    document.getElementById("kiro-cmd").style.borderColor = "#4fc3f7";
+    setTimeout(() => document.getElementById("kiro-cmd").style.borderColor = "", 1000);
+  });
+}
+
 const timer = setInterval(update, 3000);
 update();
 </script>

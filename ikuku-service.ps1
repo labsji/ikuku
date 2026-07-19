@@ -1,4 +1,4 @@
-# ikuku-service.ps1 — Scheduled task entry point
+# ikuku-service.ps1 - Scheduled task entry point
 # Starts containers, waits for ready, refreshes port proxy, keeps WSL alive
 $WSL = $null
 if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
@@ -13,7 +13,7 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 
 # Clean stale containers then start fresh
-& $WSL -u root -- bash -c 'cd /opt/ikuku; podman-compose down 2>/dev/null; podman-compose up -d'
+& $WSL -u root -- bash -c "cd $IKUKU_DIR; podman-compose down 2>/dev/null; podman-compose up -d"
 
 # Wait for HTTP 200
 for ($i = 0; $i -lt 30; $i++) {

@@ -1,4 +1,4 @@
-# uninstall.ps1 — Remove ikuku
+# uninstall.ps1 - Remove ikuku
 $WSL = $null
 if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
 elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
@@ -15,7 +15,7 @@ schtasks /end /tn "ikuku" 2>$null
 schtasks /delete /tn "ikuku" /f 2>$null
 
 Write-Host "Stopping containers..."
-& $WSL -u root -- bash -c 'cd /opt/ikuku; podman-compose down -v 2>/dev/null'
+& $WSL -u root -- bash -c "cd /opt/ikuku; podman-compose down -v 2>/dev/null"
 
 Write-Host "Removing port proxy and firewall rule..."
 netsh interface portproxy delete v4tov4 listenport=$Port listenaddress=0.0.0.0 2>$null

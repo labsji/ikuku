@@ -24,12 +24,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
           aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
+      - name: Fetch tray app binary
+        run: aws s3 cp s3://ikuku-releases/tray/ikuku-tray.exe ikuku-tray.exe
       - name: Build lite
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant lite
       - uses: actions/upload-artifact@v4
         with:
-          name: ikuku-lite
-          path: ikuku-lite.exe
+          name: ikuku-open-lite
+          path: ikuku-open-lite.exe
 
   build-full:
     runs-on: windows-latest
@@ -50,14 +52,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path shared | Out-Null
           aws s3 sync s3://ikuku-releases/bundle/ bundle/
           aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
+      - name: Fetch tray app binary
+        run: aws s3 cp s3://ikuku-releases/tray/ikuku-tray.exe ikuku-tray.exe
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
-        run: Compress-Archive -Path ikuku-full.exe, bundle -DestinationPath ikuku-full.zip
+        run: Compress-Archive -Path ikuku-open-full.exe, bundle -DestinationPath ikuku-open-full.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: ikuku-full
-          path: ikuku-full.zip
+          name: ikuku-open-full
+          path: ikuku-open-full.zip
 
   release:
     needs: [build-lite, build-full]
@@ -68,14 +72,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ikuku-lite
+          name: ikuku-open-lite
       - uses: actions/download-artifact@v4
         with:
-          name: ikuku-full
+          name: ikuku-open-full
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ikuku-lite.exe
-            ikuku-full.zip
+            ikuku-open-lite.exe
+            ikuku-open-full.zip
           generate_release_notes: true

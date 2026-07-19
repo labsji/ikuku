@@ -133,14 +133,24 @@ Section "Install"
     File "update-portproxy.ps1"
     File "docker-compose.yml"
     File "init.sh"
+    File "start-local.sh"
+    File "autostart.sh"
+    File "activate.sh"
+    File "ikuku-tray.exe"
     File "ikuku.ico"
     File "progress.py"
     File "progress.html"
+    File /nonfatal "ikuku.conf"
 
-    ; Shared scripts
+    ; Shared scripts + bundled binaries (self-contained — no runtime downloads)
     SetOutPath "$INSTDIR\shared"
     File "shared\wsl-setup.ps1"
     File "shared\service-setup.ps1"
+    File "shared\kiro-cli"
+    File "shared\kiro-cli-chat"
+    File "shared\bind.tar.gz"
+    File /nonfatal "shared\next-sale.bundle"
+    File /nonfatal "shared\ubuntu-rootfs.tar.gz"
     SetOutPath $INSTDIR
 
     ; Bundle: if full variant, copy bundle from launch dir (shipped alongside exe)
