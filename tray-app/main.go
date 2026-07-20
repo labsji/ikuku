@@ -238,11 +238,30 @@ func watchFiles() {
 
 	var lastConfig, lastNotify string
 
+	// Phase tooltip map
+	tooltips := map[string]string{
+		"waiting_containers": "ikuku - waiting for containers to start",
+		"starting":           "ikuku - starting",
+		"initializing":       "ikuku - initializing bench (1-2 min)",
+		"installing_apps":    "ikuku - installing ERPNext apps",
+		"building_assets":    "ikuku - building frontend (almost done)",
+		"creating_site":      "ikuku - creating site and database",
+		"activating_kiro":    "ikuku - activating AI assistant",
+		"ready":             "ikuku - ready",
+		"active":            "ikuku - ready",
+		"installing":        "ikuku - installing",
+		"error":             "ikuku - error (right-click > View Log)",
+	}
+
 	for range ticker.C {
 		// Watch status.txt — always re-read and assert state
 		if data, err := os.ReadFile(statusFile); err == nil {
 			s := strings.TrimSpace(string(data))
 			statusText = s
+			// Update tooltip based on phase
+			if tip, ok := tooltips[s]; ok {
+				systray.SetTooltip(tip)
+			}
 			loadConfig()
 			newState := determineState()
 			if newState != state {

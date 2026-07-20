@@ -12,11 +12,40 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "progress.html")
 CONTAINER = "ikuku_frappe_1"
 
+BALLOON_PHASES = {
+    "initializing": "Setting up your ERPNext...",
+    "installing_apps": "Installing ERPNext - halfway there",
+    "creating_site": "Nearly ready...",
+    "ready": "Your ERP is ready! Click the tray icon to begin.",
+}
+
 status = {"phase": "starting", "lines": [], "ready": False, "error": None}
 
 def poll_logs():
     global status
     start_time = time.time()
+    prev_phase = "starting"
+    status_file = "/mnt/c/ikuku/status.txt" if os.path.exists("/mnt/c") else "C:\\ikuku\\status.txt"
+    notify_file = "/mnt/c/ikuku/notification.txt" if os.path.exists("/mnt/c") else "C:\\ikuku\\notification.txt"
+
+    def on_phase_change(new_phase):
+        nonlocal prev_phase
+        if new_phase != prev_phase:
+            prev_phase = new_phase
+            # Write status.txt for tray app
+            try:
+                with open(status_file, 'w') as f:
+                    f.write(new_phase + '\n')
+            except Exception:
+                pass
+            # Write balloon notification at key transitions
+            if new_phase in BALLOON_PHASES:
+                try:
+                    with open(notify_file, 'w') as f:
+                        f.write(BALLOON_PHASES[new_phase] + '\n')
+                except Exception:
+                    pass
+
     while not status["ready"]:
         try:
             # Check if container exists yet
@@ -24,6 +53,7 @@ def poll_logs():
                                    capture_output=True, text=True, timeout=10)
             if not check.stdout.strip():
                 status["phase"] = "waiting_containers"
+                on_phase_change("waiting_containers")
                 status["lines"] = ["Waiting for containers to start...",
                                    "This may take a minute on first boot.",
                                    f"Elapsed: {int(time.time() - start_time)}s"]
@@ -40,6 +70,7 @@ def poll_logs():
                     urllib.request.urlopen("http://localhost:8000", timeout=3)
                     status["phase"] = "ready"
                     status["ready"] = True
+                    on_phase_change("ready")
                 except Exception:
                     pass
             if not status["ready"]:
@@ -55,6 +86,7 @@ def poll_logs():
                     status["phase"] = "activating_kiro"
                 else:
                     status["phase"] = "starting"
+                on_phase_change(status["phase"])
         except Exception as e:
             status["error"] = str(e)
         time.sleep(3)
