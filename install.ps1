@@ -150,6 +150,7 @@ if ($hasWT) {
 Start-Sleep 3
 $wslIp = (& $WSL -u root -- hostname -I).Trim().Split(' ')[0]
 netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp 2>&1 | Out-Null
+netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null
 $ErrorActionPreference = "Stop"
 
 # Build access URLs
