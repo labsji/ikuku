@@ -85,7 +85,7 @@ $bundleDir = Join-Path $scriptDir "bundle"
 $hasBundle = Test-Path "$bundleDir\img-mariadb.tar"
 
 # WSL2 + Ubuntu + Podman (shared for both lite and full)
-& "$sharedDir\wsl-setup.ps1" -MemoryGB 6 -SwapGB 2
+& "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
 
 # Load bundled container images if available (full/offline)
 if ($hasBundle) {
