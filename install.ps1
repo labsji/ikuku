@@ -134,9 +134,9 @@ Write-Host "Starting containers and Kiro engagement..."
 # Keep progress page as fallback (accessible at :8080 if needed)
 & $WSL -u root -- bash -c "cp '$wslScript/progress.py' '$wslScript/progress.html' $IKUKU_DIR/ 2>/dev/null" 2>&1 | Out-Null
 
-# Step 7: Start containers (background - activate.sh will engage user while this runs)
-Write-Host "Starting containers (first boot - this pulls images and takes 5-10 min)..."
-& $WSL -u root -- bash -c "cd $IKUKU_DIR; podman-compose up -d 2>&1 | tail -5"
+# Step 7: Start containers in background (tray app monitors progress)
+Write-Host "Starting containers in background (tray app will show when ready)..."
+& $WSL -u root -- bash -c "cd $IKUKU_DIR; nohup podman-compose up -d > /tmp/ikuku-compose.log 2>&1 &"
 
 # Step 8: Open WSL terminal with Kiro
 Write-Host "Opening Kiro terminal..."
@@ -183,4 +183,6 @@ $uninstMsg = "To uninstall: powershell -File " + $scriptDir + "\uninstall.ps1"
 Write-Host $uninstMsg -ForegroundColor DarkGray
 
 # Signal tray app: install complete, containers starting
-& $WSL -u root -- bash -c 'echo active > /mnt/c/ikuku/status.txt'
+# Signal tray app: containers starting, will poll for ready
+# Background task writes 'active' when ERPNext responds
+& $WSL -u root -- bash -c "nohup bash -c 'while ! curl -sf http://localhost:8000 > /dev/null 2>&1; do sleep 10; done; echo active > /mnt/c/ikuku/status.txt' > /tmp/ikuku-ready-poll.log 2>&1 &"
