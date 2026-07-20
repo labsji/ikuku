@@ -73,11 +73,11 @@ jobs:
         if: env.VARIANT == 'full'
         run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
 
-      - name: Fetch Kiro CLI + bind
+      - name: Fetch bind + tray
         run: |
           New-Item -ItemType Directory -Force -Path shared | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/aws/kiro-cli/releases/latest/download/kiro-cli-linux-x64" -OutFile shared/kiro-cli
-          Invoke-WebRequest -Uri "https://github.com/labsji/bind/archive/refs/heads/main.tar.gz" -OutFile shared/bind.tar.gz
+          aws s3 cp s3://ikuku-releases/bind/bind.tar.gz shared/bind.tar.gz
+          aws s3 cp s3://ikuku-releases/tray/ikuku-tray.exe ikuku-tray.exe
 
       - name: Build installer
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant ${{ env.VARIANT }}
