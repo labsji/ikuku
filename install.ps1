@@ -42,12 +42,17 @@ Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 # Step 0: Check WSL2 + container support
 $errors = @()
 if (-not $WSL) {
-    $errors += "WSL is not installed. Install from https://aka.ms/wslinstall"
+    # WSL binary not found at all - unusual, check if Windows version supports it
+    $build = [System.Environment]::OSVersion.Version.Build
+    if ($build -lt 19041) {
+        $errors += "This Windows version does not support WSL2 (requires build 19041+)."
+    }
+    # Otherwise wsl-setup.ps1 will handle installation
 } else {
-# Basic WSL check
+# Basic WSL check - only fail on hardware issues, not "not installed" state
 $wslCheck = & $WSL --status 2>&1 | Out-String
-if ($wslCheck -match "not supported|not enabled") {
-    $errors += "WSL2 is not available on this system."
+if ($wslCheck -match "not supported") {
+    $errors += "WSL2 is not available on this system (hardware virtualization may be disabled)."
 }
 # Check if any distro is running WSL1 (only matters if distros exist)
 $wslVersion = & $WSL -l -v 2>&1 | Out-String
