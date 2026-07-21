@@ -60,7 +60,9 @@ jobs:
       - name: Build full
         run: powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Variant full
       - name: Zip full package
-        run: Compress-Archive -Path ikuku-kiro-full.exe, bundle -DestinationPath ikuku-kiro-full.zip
+        run: |
+          if (!(Test-Path "ikuku.conf")) { Set-Content -Path "ikuku.conf" -Value "AUTH_ENDPOINT=https://auth.next.skith.in`nACTIVATION_CODES=`nPROSPECT_NAME=`nCOUNTRY=India`nINSTALL_ID=" }
+          Compress-Archive -Path ikuku-kiro-full.exe, bundle, ikuku.conf -DestinationPath ikuku-kiro-full.zip
       - uses: actions/upload-artifact@v4
         with:
           name: ikuku-kiro-full
