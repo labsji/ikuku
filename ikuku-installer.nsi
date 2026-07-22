@@ -40,6 +40,13 @@ Function OpenBrowser
     ExecShell "open" "http://localhost:8080"
 FunctionEnd
 
+; Silent mode: set default apps (wiki,erpnext) since custom page is skipped
+Function .onInit
+    ${If} ${Silent}
+        StrCpy $SelectedApps "wiki,erpnext"
+    ${EndIf}
+FunctionEnd
+
 Var WikiCheck
 Var LmsCheck
 Var ErpNextCheck
