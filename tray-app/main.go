@@ -270,6 +270,22 @@ func watchFiles() {
 			}
 		}
 
+		// Independent readiness check: if still installing, poll ERPNext directly
+		if state == StateInstalling || state == StateReady {
+			resp, err := http.Get(healthURL)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 200 {
+					// ERPNext is live — write status.txt and transition
+					os.WriteFile(statusFile, []byte("active"), 0644)
+					statusText = "active"
+					state = StateActive
+					systray.SetTooltip("ikuku - ready")
+					updateMenu()
+				}
+			}
+		}
+
 		// Watch tray-config.json
 		if data, err := os.ReadFile(configJSON); err == nil {
 			s := string(data)

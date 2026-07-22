@@ -165,6 +165,10 @@ Section "Install"
         nsExec::ExecToLog 'xcopy "$EXEDIR\bundle" "$INSTDIR\bundle\" /E /I /Y'
     !endif
 
+    ; Copy ikuku.conf from launch dir if present (user places it next to exe)
+    IfFileExists "$EXEDIR\ikuku.conf" 0 +2
+        CopyFiles /SILENT "$EXEDIR\ikuku.conf" "$INSTDIR\ikuku.conf"
+
     ; Always create uninstaller so failed installs can be cleaned up
     WriteUninstaller "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "DisplayName" "${WLTITLE}"
