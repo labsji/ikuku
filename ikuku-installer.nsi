@@ -42,9 +42,8 @@ FunctionEnd
 
 ; Silent mode: set default apps (wiki,erpnext) since custom page is skipped
 Function .onInit
-    ${If} ${Silent}
+    IfSilent 0 +2
         StrCpy $SelectedApps "wiki,erpnext"
-    ${EndIf}
 FunctionEnd
 
 Var WikiCheck
