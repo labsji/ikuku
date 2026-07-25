@@ -78,6 +78,16 @@ if [ -f "$TOKEN_FILE" ]; then
 fi
 export KIRO_API_KEY
 
+# Inject niche-pattern context if available (CMMN case context)
+if [ -f "$REPO_DIR/niche-pattern.md" ]; then
+    cat >> .kiro/instructions.md << 'PATTERN_CTX'
+
+## Niche Pattern Context
+Read niche-pattern.md for the case management context of this reseller's niche.
+Use it to guide tutorial delivery and adapt exercises to their specific vertical pattern.
+PATTERN_CTX
+fi
+
 if which kiro-cli >/dev/null 2>&1; then
     kiro-cli chat --trust-all-tools
 elif podman exec ikuku_frappe_1 ls /home/frappe/.local/bin/kiro-cli >/dev/null 2>&1; then
