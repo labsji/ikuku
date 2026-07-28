@@ -176,6 +176,7 @@ done
 bench --site "$SITE" set-config developer_mode 1
 bench --site "$SITE" clear-cache
 bench use "$SITE"
+bench set-config -g serve_default_site True --parse
 
 # --- Kiro layer: install kiro-cli + bind with kiro provider ---
 # All binaries bundled in /workspace/shared/ by the NSIS installer — no runtime downloads.
