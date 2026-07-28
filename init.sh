@@ -143,23 +143,39 @@ get_release_tag() {
     curl -sf "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4
 }
 
-# Install each selected app
+# Install each selected app (with retry)
 IFS=',' read -ra APP_LIST <<< "$APPS"
 for app in "${APP_LIST[@]}"; do
     app=$(echo "$app" | xargs)
     echo "Getting app: $app"
-    if echo "$V16_APPS" | grep -qw "$app"; then
-        bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app"
-    else
-        TAG=$(get_release_tag "$app")
-        if [ -n "$TAG" ]; then
-            echo "  Using release $TAG"
-            bench get-app --branch "$TAG" --resolve-deps "$app" || bench get-app --resolve-deps "$app"
+    GOT_APP=false
+    for attempt in 1 2 3; do
+        if echo "$V16_APPS" | grep -qw "$app"; then
+            bench get-app --branch "$FRAPPE_BRANCH" --resolve-deps "$app" && GOT_APP=true && break
         else
-            bench get-app --resolve-deps "$app" || bench get-app "$app"
+            TAG=$(get_release_tag "$app")
+            if [ -n "$TAG" ]; then
+                echo "  Using release $TAG (attempt $attempt)"
+                (bench get-app --branch "$TAG" --resolve-deps "$app" || bench get-app --resolve-deps "$app") && GOT_APP=true && break
+            else
+                (bench get-app --resolve-deps "$app" || bench get-app "$app") && GOT_APP=true && break
+            fi
         fi
+        echo "  Attempt $attempt failed, retrying in 10s..."
+        sleep 10
+    done
+    if [ "$GOT_APP" = "false" ]; then
+        echo "ERROR: Failed to get app '$app' after 3 attempts"
     fi
 done
+
+# Verify critical apps are present before creating site
+if [ ! -d "apps/erpnext" ] && echo "$APPS" | grep -q "erpnext"; then
+    echo "FATAL: erpnext app not found. Cannot create site."
+    echo "error" > /workspace/status.txt 2>/dev/null
+    echo "error" > /mnt/c/ikuku/status.txt 2>/dev/null
+    exit 1
+fi
 
 bench new-site "$SITE" \
 --force \
@@ -250,5 +266,11 @@ if [ ! -d /home/frappe/next-sale ] && [ -f /workspace/shared/next-sale.bundle ];
 fi
 
 cd /home/frappe/frappe-bench
+
+# Signal ready (tray reads this)
+echo "ready" > /workspace/status.txt 2>/dev/null
+echo "ready" > /mnt/c/ikuku/status.txt 2>/dev/null
+echo "✓ ikuku ready — starting bench..."
+
 bench start
 
