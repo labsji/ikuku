@@ -3,7 +3,16 @@ param([string]$MemoryGB = "12", [string]$SwapGB = "4")
 
 $WSL = $null
 if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
-elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
+elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = (Get-Command wsl.exe).Source }
+
+if (-not $WSL) {
+    Write-Host "WSL not found. Installing WSL..."
+    wsl --install --no-distribution 2>$null
+    Start-Sleep 10
+    if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
+    elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = (Get-Command wsl.exe).Source }
+    if (-not $WSL) { Write-Error "WSL installation failed. Reboot and retry."; exit 1 }
+}
 
 # WSL memory config
 @("[wsl2]","memory=${MemoryGB}GB","swap=${SwapGB}GB") | Set-Content "$env:USERPROFILE\.wslconfig"

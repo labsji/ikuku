@@ -28,6 +28,8 @@ Set-Content -Path "C:\ikuku\status.txt" -Value "installing"
 
 # Start tray app immediately (first thing user sees)
 $trayExe = "C:\ikuku\ikuku-tray.exe"
+Stop-Process -Name "ikuku-tray" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
 if (Test-Path "$scriptDir\ikuku-tray.exe") {
     Copy-Item "$scriptDir\ikuku-tray.exe" $trayExe -Force
 }
