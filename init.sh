@@ -217,6 +217,51 @@ bench --site "$SITE" install-app bind || true
 bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
 bench --site "$SITE" migrate
 
+# --- Load seed.repl if present (pre-configured niche from evalKit) ---
+if [ -f /workspace/seed.repl ]; then
+    echo "Loading seed.repl (pre-configured niche)..."
+    cd /home/frappe/frappe-bench
+    env/bin/python -c "
+import frappe, sys
+frappe.init(site='$SITE')
+frappe.connect()
+frappe.set_user('Administrator')
+sys.path.insert(0, '/home/frappe/frappe-bench/apps/bind')
+from bind.parser import parse
+from bind.executor import execute
+
+with open('/workspace/seed.repl') as f:
+    content = f.read()
+
+blocks = [b.strip() for b in content.split('\n\n') if b.strip() and b.strip().startswith('create')]
+success = 0
+for block in blocks:
+    try:
+        parsed = parse(block)
+        if parsed:
+            execute(parsed)
+            success += 1
+    except Exception as e:
+        pass  # skip duplicates/errors silently
+
+frappe.db.commit()
+print(f'  Seed loaded: {success}/{len(blocks)} records created')
+" || echo "  ⚠ Seed loading failed (non-fatal)"
+fi
+
+# Copy niche-context.md into Kiro instructions if present
+if [ -f /workspace/niche-context.md ]; then
+    echo "Loading niche context for Kiro..."
+    mkdir -p /home/frappe/.kiro
+    if [ -f /home/frappe/.kiro/instructions.md ]; then
+        echo "" >> /home/frappe/.kiro/instructions.md
+        echo "## Prospect Context" >> /home/frappe/.kiro/instructions.md
+        cat /workspace/niche-context.md >> /home/frappe/.kiro/instructions.md
+    else
+        cp /workspace/niche-context.md /home/frappe/.kiro/instructions.md
+    fi
+fi
+
 # --- Kiro activation (headless via auth proxy) ---
 # OTP baked by reseller via evalKit.sh into ikuku.conf alongside the exe
 # AUTH_ENDPOINT: ikuku.conf → env var → default

@@ -106,6 +106,9 @@ $wslShared = (& $WSL -u root -- wslpath -a ($sharedDir -replace '\\','/')).Trim(
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR/shared; cp '$wslShared/kiro-cli' '$wslShared/kiro-cli-chat' '$wslShared/bind.tar.gz' $IKUKU_DIR/shared/ 2>/dev/null; if [ -f '$wslShared/next-sale.bundle' ]; then cp '$wslShared/next-sale.bundle' $IKUKU_DIR/shared/; fi"
 # Copy ikuku.conf if present (contains activation code baked by evalKit)
 & $WSL -u root -- bash -c "if [ -f '$wslScript/ikuku.conf' ]; then cp '$wslScript/ikuku.conf' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/ikuku.conf > $IKUKU_DIR/ikuku.conf.tmp 2>/dev/null; mv $IKUKU_DIR/ikuku.conf.tmp $IKUKU_DIR/ikuku.conf 2>/dev/null; fi"
+# Copy seed.repl and niche-context.md if present (pre-configured niche from evalKit)
+& $WSL -u root -- bash -c "if [ -f '$wslScript/seed.repl' ]; then cp '$wslScript/seed.repl' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/seed.repl > $IKUKU_DIR/seed.repl.tmp 2>/dev/null; mv $IKUKU_DIR/seed.repl.tmp $IKUKU_DIR/seed.repl 2>/dev/null; fi"
+& $WSL -u root -- bash -c "if [ -f '$wslScript/niche-context.md' ]; then cp '$wslScript/niche-context.md' $IKUKU_DIR/; tr -d '\r' < $IKUKU_DIR/niche-context.md > $IKUKU_DIR/niche-context.md.tmp 2>/dev/null; mv $IKUKU_DIR/niche-context.md.tmp $IKUKU_DIR/niche-context.md 2>/dev/null; fi"
 # Write selected apps into .env for docker-compose
 & $WSL -u root -- bash -c "echo 'IKUKU_APPS=$Apps' > $IKUKU_DIR/.env"
 
