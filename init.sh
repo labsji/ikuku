@@ -53,16 +53,13 @@ print('yes' if '$SITE_DB' in dbs else 'no')
         chmod +x /home/frappe/.local/bin/kiro-cli /home/frappe/.local/bin/kiro-cli-chat
         export PATH="/home/frappe/.local/bin:$PATH"
     fi
-    if [ -f /workspace/shared/bind.tar.gz ] && [ ! -d apps/bind ]; then
-        echo "Installing bind..."
+    if [ -f /workspace/shared/bind.tar.gz ]; then
+        echo "Installing bind from /workspace/shared..."
         cd apps && rm -rf bind && mkdir bind && cd bind && tar xzf /workspace/shared/bind.tar.gz && cd ../..
         PYVER=$(ls env/lib/ | grep python | head -1)
         ln -sf /home/frappe/frappe-bench/apps/bind/bind "env/lib/$PYVER/site-packages/bind"
         [ -n "$(tail -c1 sites/apps.txt)" ] && echo >> sites/apps.txt
         grep -q '^bind$' sites/apps.txt || printf '%s\n' bind >> sites/apps.txt
-        bench --site "$SITE" install-app bind || true
-        bench --site "$SITE" set-config bind_llm '{"provider": "kiro", "home": "/home/frappe"}' --parse || true
-        bench --site "$SITE" migrate
     fi
 
     # --- Kiro activation (idempotent — only if no token yet) ---
