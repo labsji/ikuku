@@ -34,7 +34,48 @@ cd "$SCRIPT_DIR"
 # Clean any existing state
 $COMPOSE down -v 2>/dev/null || true
 
-# Start fresh build
+# For the build phase, use a temporary compose override that removes the frappe-bench volume
+# (the volume mount prevents bench init from working on an empty directory)
+cat > /tmp/docker-compose.dump-build.yml << 'YAML'
+version: "3.7"
+name: ikuku
+services:
+  mariadb:
+    image: mariadb:10.8
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: 123
+    volumes:
+      - mariadb-data:/var/lib/mysql
+  redis:
+    image: redis:alpine
+  frappe:
+    image: frappe/bench:latest
+    command: bash /workspace/init.sh
+    environment:
+      - SHELL=/bin/bash
+      - IKUKU_APPS=${IKUKU_APPS:-erpnext}
+    working_dir: /home/frappe
+    volumes:
+      - .:/workspace
+    ports:
+      - 8000:8000
+      - 9000:9000
+      - 2718:2718
+      - 7681:7681
+volumes:
+  mariadb-data:
+YAML
+
+# Copy init.sh and docker-compose to use the build version
+cp "$SCRIPT_DIR/docker-compose.yml" "$SCRIPT_DIR/docker-compose.yml.bak"
+cp /tmp/docker-compose.dump-build.yml "$SCRIPT_DIR/docker-compose.yml"
+
+# Start fresh build (no frappe-bench volume — bench builds in container filesystem)
 $COMPOSE up -d
 
 echo "Waiting for bench to finish building..."
@@ -70,17 +111,19 @@ echo ""
 echo "=== Step 2: Stop containers ==="
 $COMPOSE stop
 
-echo ""
-echo "=== Step 3: Export frappe-bench volume ==="
-# Volume name follows compose project naming: ikuku_frappe-bench
-BENCH_VOL="ikuku_frappe-bench"
+# Restore original docker-compose.yml (with frappe-bench volume for production use)
+if [ -f "$SCRIPT_DIR/docker-compose.yml.bak" ]; then
+    mv "$SCRIPT_DIR/docker-compose.yml.bak" "$SCRIPT_DIR/docker-compose.yml"
+fi
+
 MARIA_VOL="ikuku_mariadb-data"
 
-# Export bench volume
-$CONTAINER_CMD run --rm \
-    -v "${BENCH_VOL}:/data:ro" \
-    -v /tmp:/out \
-    alpine tar cf /out/bench-dump.tar -C /data .
+echo ""
+echo "=== Step 3: Export frappe-bench from container ==="
+# Since we built without the frappe-bench named volume, export directly from container
+$CONTAINER_CMD cp ikuku_frappe_1:/home/frappe/frappe-bench /tmp/frappe-bench-export
+tar cf /tmp/bench-dump.tar -C /tmp/frappe-bench-export .
+rm -rf /tmp/frappe-bench-export
 
 echo "  bench-dump.tar: $(du -sh /tmp/bench-dump.tar | cut -f1)"
 
@@ -122,6 +165,7 @@ echo "=== Step 6: Verify dumps ==="
 if [[ "$BENCH_DUMP" == *.zst ]]; then
     zstd -dc "$BENCH_DUMP" | tar tf - | grep -q "apps/frappe" && echo "  ✓ bench dump contains apps/frappe" || { echo "  ✗ bench dump missing apps/frappe"; exit 1; }
     zstd -dc "$BENCH_DUMP" | tar tf - | grep -q "apps/erpnext" && echo "  ✓ bench dump contains apps/erpnext" || echo "  ⚠ bench dump missing erpnext (may be expected)"
+    zstd -dc "$BENCH_DUMP" | tar tf - | grep -q "sites/" && echo "  ✓ bench dump contains sites/" || echo "  ⚠ bench dump missing sites/"
 else
     tar tf "$BENCH_DUMP" | grep -q "apps/frappe" && echo "  ✓ bench dump contains apps/frappe" || { echo "  ✗ bench dump missing apps/frappe"; exit 1; }
 fi
