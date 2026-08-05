@@ -95,7 +95,7 @@ Or push to GitHub (`github` remote) and pull from there on Windows.
 ```
 s3://ikuku-releases/
 ├── bind/bind.tar.gz    ← rebuild: cd ~/bind && tar czf + aws s3 cp
-├── kiro/kiro-cli       ← update: aws s3 cp /usr/local/bin/kiro-cli
+├── kiro/kiro-cli       ← update: aws s3 cp /usr/local/bin/kiro-cli  (current: 2.15.0)
 ├── kiro/kiro-cli-chat  ← update: aws s3 cp /usr/local/bin/kiro-cli-chat
 └── kiro/kiro-cli-term  ← update: aws s3 cp /usr/local/bin/kiro-cli-term
 ```
