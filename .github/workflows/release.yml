@@ -48,8 +48,12 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
-      - name: Fetch bundle
+      - name: Fetch bundle (container images)
         run: aws s3 sync s3://ikuku-releases/bundle/ bundle/
+      - name: Fetch volume dumps
+        run: |
+          aws s3 cp s3://ikuku-releases/dump/bench-dump.tar.zst bundle/bench-dump.tar.zst
+          aws s3 cp s3://ikuku-releases/dump/mariadb-dump.tar.zst bundle/mariadb-dump.tar.zst
       - name: Fetch kiro binaries into shared/
         run: |
           aws s3 cp s3://ikuku-releases/kiro/kiro-cli shared/kiro-cli

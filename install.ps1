@@ -96,7 +96,29 @@ if ($hasBundle) {
     & $WSL -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load; podman tag ikuku-bench:fresh docker.io/frappe/bench:latest"
 }
 
-# Step 2: Copy docker config into WSL with selected apps
+# Step 2a: Restore volume dumps if available (full variant — skip source build)
+if ($hasBundle) {
+    $hasDumps = (Test-Path "$bundleDir\bench-dump.tar.zst") -or (Test-Path "$bundleDir\bench-dump.tar.gz")
+    if ($hasDumps) {
+        Write-Host "Restoring preconfigured volumes from dump..."
+        $wslBundle = (& $WSL -u root -- wslpath -a ($bundleDir -replace '\\','/')).Trim()
+
+        # Create named volumes
+        & $WSL -u root -- bash -c "podman volume create ikuku_mariadb-data 2>/dev/null; podman volume create ikuku_frappe-bench 2>/dev/null"
+
+        # Determine dump format (zstd preferred, gzip fallback)
+        if (Test-Path "$bundleDir\bench-dump.tar.zst") {
+            & $WSL -u root -- bash -c "zstd -dc '$wslBundle/bench-dump.tar.zst' | podman volume import ikuku_frappe-bench -"
+            & $WSL -u root -- bash -c "zstd -dc '$wslBundle/mariadb-dump.tar.zst' | podman volume import ikuku_mariadb-data -"
+        } else {
+            & $WSL -u root -- bash -c "gunzip -c '$wslBundle/bench-dump.tar.gz' | podman volume import ikuku_frappe-bench -"
+            & $WSL -u root -- bash -c "gunzip -c '$wslBundle/mariadb-dump.tar.gz' | podman volume import ikuku_mariadb-data -"
+        }
+        Write-Host "  Volumes restored." -ForegroundColor Green
+    }
+}
+
+# Step 2b: Copy docker config into WSL with selected apps
 Write-Host "Setting up Frappe in WSL..."
 & $WSL -u root -- bash -c "mkdir -p $IKUKU_DIR"
 $wslScript = (& $WSL -u root -- wslpath -a ($scriptDir -replace '\\','/')).Trim()

@@ -44,9 +44,9 @@ print('yes' if '$SITE_DB' in dbs else 'no')
         bench use "$SITE"
     fi
 
-    # --- Kiro layer (idempotent — install if not already present) ---
-    if [ -f /workspace/shared/kiro-cli ] && [ ! -f /home/frappe/.local/bin/kiro-cli ]; then
-        echo "Installing kiro-cli..."
+    # --- Kiro layer (idempotent — always refresh from /workspace/shared) ---
+    if [ -f /workspace/shared/kiro-cli ]; then
+        echo "Refreshing kiro-cli from /workspace/shared..."
         mkdir -p /home/frappe/.local/bin
         cp /workspace/shared/kiro-cli /home/frappe/.local/bin/kiro-cli
         cp /workspace/shared/kiro-cli-chat /home/frappe/.local/bin/kiro-cli-chat
