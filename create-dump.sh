@@ -121,6 +121,8 @@ MARIA_VOL="ikuku_mariadb-data"
 echo ""
 echo "=== Step 3: Export frappe-bench from container ==="
 # Since we built without the frappe-bench named volume, export directly from container
+# Ensure all files are owned by frappe (UID 1000) — the container runs as frappe
+$CONTAINER_CMD exec ikuku_frappe_1 chown -R 1000:1000 /home/frappe/frappe-bench 2>/dev/null || true
 $CONTAINER_CMD cp ikuku_frappe_1:/home/frappe/frappe-bench /tmp/frappe-bench-export
 tar cf /tmp/bench-dump.tar -C /tmp/frappe-bench-export .
 rm -rf /tmp/frappe-bench-export
