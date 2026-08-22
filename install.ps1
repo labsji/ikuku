@@ -88,7 +88,8 @@ if ($errors.Count -gt 0) {
 # The tar contains: Ubuntu + podman + images + volumes + ERPNext + niche data.
 # Created by: delegate runs evalkit build, exports WSL filesystem.
 # ═══════════════════════════════════════════════════════════════════════
-$wslTar = Get-ChildItem -Path $scriptDir, (Split-Path $scriptDir), "$env:USERPROFILE\Downloads" -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
+$wslTar = Get-ChildItem -Path $scriptDir, (Split-Path $scriptDir) -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $wslTar) { $wslTar = Get-ChildItem -Path "$env:USERPROFILE\Downloads" -Filter "*wsl*.tar" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
 if ($wslTar) {
     Write-Host ""
     Write-Host "=== Prospect Mode: Importing preconfigured ERPNext ===" -ForegroundColor Green
@@ -125,7 +126,8 @@ if ($wslTar) {
     # Start containers
     Write-Host "Starting ERPNext..."
     Set-Content -Path "C:\ikuku\status.txt" -Value "starting"
-    & $WSL -d $distroName -u root -- bash -c 'podman start ikuku_mariadb_1 ikuku_redis_1 ikuku_frappe_1 2>/dev/null || (cd /opt/ikuku && podman-compose up -d 2>/dev/null)'
+    $bashStart = "podman start ikuku_mariadb_1 ikuku_redis_1 ikuku_frappe_1 2>/dev/null; if [ `$? -ne 0 ]; then cd /opt/ikuku; podman-compose up -d 2>/dev/null; fi"
+    & $WSL -d $distroName -u root -- bash -c $bashStart
 
     # Port forwarding
     $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null)
@@ -133,15 +135,15 @@ if ($wslTar) {
     if ($wslIp) {
         netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null
     }
-    $fwRule = 'netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=8000'
-    Invoke-Expression "$fwRule 2>&1" | Out-Null
+    netsh advfirewall firewall add rule name=ikuku dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
 
     # Copy ikuku.conf to working directory
     $confSource = Join-Path $scriptDir "ikuku.conf"
     if (Test-Path $confSource) { Copy-Item $confSource "C:\ikuku\ikuku.conf" -Force }
 
     # Kiro CLI activation check
-    $kiroActive = & $WSL -d $distroName -u root -- bash -c 'test -f /opt/ikuku/shared/kiro-cli && /opt/ikuku/shared/kiro-cli --version 2>/dev/null && echo KIRO_OK' 2>$null
+    $bashKiro = "test -f /opt/ikuku/shared/kiro-cli; if [ `$? -eq 0 ]; then /opt/ikuku/shared/kiro-cli --version 2>/dev/null; echo KIRO_OK; fi"
+    $kiroActive = & $WSL -d $distroName -u root -- bash -c $bashKiro 2>$null
     if ($kiroActive -match "KIRO_OK") {
         Write-Host "  Kiro CLI: available (Master of Ceremonies ready)" -ForegroundColor Cyan
     }
