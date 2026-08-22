@@ -33,19 +33,20 @@ A minimal Frappe V16 deployment optimized for cost, running on an AWS Graviton (
 |----------|-------------|
 | t4g.nano Spot Instance | ~$1.50 |
 | Elastic IP (attached to running instance) | $0.00 |
-| Elastic IP (when instance is stopped, ~few min/month) | ~$0.01 |
-| EBS Volume (8 GB gp3) | ~$0.64 |
+| Elastic IP (when instance is terminated, ~few min/month) | ~$0.01 |
+| EBS Volume (16 GB gp3) | ~$1.28 |
+| S3 Backup Bucket (< 1 GB) | ~$0.02 |
 | Lambda invocations (< 100/month) | ~$0.00 |
-| **Total** | **~$2.15/month** |
+| **Total** | **~$2.81/month** |
 
-> Note: EIPs are free when attached to a running instance. Cost only accrues during the brief seconds between spot interruption and new instance launch.
+> Note: EIPs are free when attached to a running instance. Cost only accrues during the brief period between spot termination and new instance launch.
 
 ## Why SQLite?
 
 - **Single user**: This is a personal site, no concurrent write pressure
 - **No RDS cost**: Eliminates the $15+/month cost of the smallest RDS instance
 - **Simpler stack**: No database server to manage, patch, or monitor
-- **Data persists on EBS**: The SQLite file lives on the instance's EBS volume which survives spot interruptions (instance is stopped, not terminated)
+- **Data backed up to S3**: The SQLite file and site config are backed up hourly to S3, and automatically restored on new instance boot after spot termination
 
 ## Apps Included
 
@@ -129,13 +130,20 @@ sudo systemctl restart frappe-bench
 The key cost-saving mechanism is using Spot Instances with automatic EIP reassignment:
 
 1. **Spot Instance** runs the Frappe site at a ~70% discount vs On-Demand
-2. When AWS reclaims the spot capacity, the instance is **stopped** (not terminated)
-3. The ASG detects the stopped instance and launches a new one
+2. When AWS reclaims the spot capacity, the instance is **terminated**
+3. The ASG detects the termination and launches a new replacement instance
 4. **EventBridge** fires an event when the new instance enters the `running` state
 5. **Lambda** picks up the event, verifies the instance belongs to our ASG, and reassigns the EIP
 6. **Downtime**: Typically under 2 minutes (just the time for a new instance to launch and bootstrap)
 
-Since the EBS volume persists across spot interruptions (the instance is stopped/started, not terminated), no data is lost. The SQLite database and all site files remain intact.
+## Data Persistence (S3 Backup/Restore)
+
+Since spot instances are terminated (not stopped), site data cannot rely on local EBS alone. Instead, an automated S3 backup/restore mechanism ensures no data is lost:
+
+- **Hourly backup**: A cron job creates a tarball of the sites directory (SQLite DB, config, apps) and uploads it to S3
+- **Restore on boot**: When a new instance launches, the init script checks S3 for the latest backup and restores from it before running a fresh install
+- **Minimal data loss**: At most one hour of changes can be lost between backup and spot termination
+- **Cost**: S3 storage for backups is negligible (< $0.02/month for a personal site)
 
 ## Troubleshooting
 

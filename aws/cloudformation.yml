@@ -49,6 +49,37 @@ Conditions:
   HasDomain: !Not [!Equals [!Ref DomainName, '']]
 
 Resources:
+  # --- S3 Backup Bucket ---
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-frappe-backups-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldBackups
+            Status: Enabled
+            ExpirationInDays: 30
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-frappe-backups'
+
+  # --- SSM Parameter for Admin Password ---
+  AdminPasswordParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/admin-password'
+      Type: String
+      Value: !Ref AdminPassword
+      Description: Frappe admin password (fetched at runtime by instance)
+      Tags:
+        Name: !Sub '${AWS::StackName}-admin-password'
+
   # --- Elastic IP ---
   FrappeEIP:
     Type: AWS::EC2::EIP
@@ -97,6 +128,29 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3BackupAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt BackupBucket.Arn
+                  - !Sub '${BackupBucket.Arn}/*'
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/admin-password'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-instance-role'
@@ -145,9 +199,20 @@ Resources:
 
             echo "=== Frappe ARM Spot Instance Bootstrap ==="
 
-            # Update system and install git
+            # Update system and install git + AWS CLI
             dnf update -y
-            dnf install -y git
+            dnf install -y git aws-cli
+
+            # Fetch admin password from SSM Parameter Store at runtime
+            export ADMIN_PASSWORD=$(aws ssm get-parameter \
+              --name '/${AWS::StackName}/admin-password' \
+              --with-decryption \
+              --region ${AWS::Region} \
+              --query 'Parameter.Value' \
+              --output text)
+
+            # Export S3 bucket name for backup/restore
+            export BACKUP_BUCKET='${BackupBucket}'
 
             # Clone the ikuku repo
             cd /opt
@@ -157,7 +222,6 @@ Resources:
             # Run init script for native Frappe install (no Docker needed)
             if [ -f aws/init-sqlite.sh ]; then
               chmod +x aws/init-sqlite.sh
-              export ADMIN_PASSWORD='${AdminPassword}'
               bash aws/init-sqlite.sh "${DomainName}"
             else
               echo "init-sqlite.sh not found - pull latest or deploy manually"
@@ -363,6 +427,10 @@ Outputs:
   ElasticIP:
     Description: Dedicated Elastic IP for the Frappe instance
     Value: !Ref FrappeEIP
+
+  BackupBucketName:
+    Description: S3 bucket for site backups
+    Value: !Ref BackupBucket
 
   WebURL:
     Description: URL to access the Frappe application
