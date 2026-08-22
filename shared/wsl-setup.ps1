@@ -1,5 +1,5 @@
 # shared/wsl-setup.ps1 - Common WSL2 + podman setup for all Frappe apps
-param([string]$MemoryGB = "12", [string]$SwapGB = "4")
+param([string]$MemoryGB = "12", [string]$SwapGB = "4", [switch]$SkipDistro)
 
 $WSL = $null
 if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
@@ -19,6 +19,12 @@ if (-not $WSL) {
 
 # Ensure WSL2 is the default (critical for multi-user scenarios)
 & $WSL --set-default-version 2 2>$null
+
+# In prospect mode (SkipDistro), we only need the WSL kernel — no Ubuntu distro
+if ($SkipDistro) {
+    Write-Host "WSL2 kernel ready (prospect mode — distro will be imported from tar)"
+    return
+}
 
 # Ensure Ubuntu distro exists
 $distros = & $WSL -l -q 2>&1 | Out-String

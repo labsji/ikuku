@@ -81,6 +81,85 @@ if ($errors.Count -gt 0) {
     exit 1
 }
 
+# ═══════════════════════════════════════════════════════════════════════
+# PROSPECT MODE DETECTION
+# If a complete WSL filesystem tar exists alongside the installer,
+# import it directly. This is the fastest path — everything is pre-built.
+# The tar contains: Ubuntu + podman + images + volumes + ERPNext + niche data.
+# Created by: delegate runs evalkit build, exports WSL filesystem.
+# ═══════════════════════════════════════════════════════════════════════
+$wslTar = Get-ChildItem -Path $scriptDir, (Split-Path $scriptDir), "$env:USERPROFILE\Downloads" -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($wslTar) {
+    Write-Host ""
+    Write-Host "=== Prospect Mode: Importing preconfigured ERPNext ===" -ForegroundColor Green
+    Write-Host "Found: $($wslTar.Name) ($([math]::Round($wslTar.Length / 1GB, 1)) GB)"
+    Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
+
+    # Ensure WSL2 kernel is installed (just the kernel, no distro needed)
+    & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro
+
+    # Prevent WSL auto-shutdown
+    @("[wsl2]", "vmIdleTimeout=-1", "memory=12GB", "swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
+
+    # Import the filesystem as 'ikuku' distro
+    $distroName = "ikuku"
+    $installPath = "C:\ikuku"
+    Write-Host "Importing WSL distro '$distroName' (2-5 minutes)..."
+    $existing = & $WSL -l -q 2>&1 | Out-String
+    if ($existing -match $distroName) {
+        Write-Host "  Replacing existing '$distroName' distro..."
+        & $WSL --unregister $distroName 2>&1 | Out-Null
+    }
+    & $WSL --import $distroName $installPath $wslTar.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "WSL import failed. A reboot may be required (VirtualMachinePlatform feature)." -ForegroundColor Yellow
+        Write-Host "After reboot, run this installer again — it will resume." -ForegroundColor Yellow
+        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
+        # Enable features that need reboot
+        dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>$null | Out-Null
+        dism /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>$null | Out-Null
+        exit 0
+    }
+    Write-Host "  Import complete." -ForegroundColor Green
+
+    # Start containers
+    Write-Host "Starting ERPNext..."
+    Set-Content -Path "C:\ikuku\status.txt" -Value "starting"
+    & $WSL -d $distroName -u root -- bash -c "podman start ikuku_mariadb_1 ikuku_redis_1 ikuku_frappe_1 2>/dev/null || (cd /opt/ikuku && podman-compose up -d 2>/dev/null)"
+
+    # Port forwarding
+    $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null).Trim().Split(' ')[0]
+    if ($wslIp) {
+        netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null
+    }
+    netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
+
+    # Copy ikuku.conf to working directory
+    $confSource = Join-Path $scriptDir "ikuku.conf"
+    if (Test-Path $confSource) { Copy-Item $confSource "C:\ikuku\ikuku.conf" -Force }
+
+    # Kiro CLI activation check
+    $kiroActive = & $WSL -d $distroName -u root -- bash -c "test -f /opt/ikuku/shared/kiro-cli && /opt/ikuku/shared/kiro-cli --version 2>/dev/null && echo KIRO_OK" 2>$null
+    if ($kiroActive -match "KIRO_OK") {
+        Write-Host "  Kiro CLI: available (Master of Ceremonies ready)" -ForegroundColor Cyan
+    }
+
+    # Signal tray: ready
+    Set-Content -Path "C:\ikuku\status.txt" -Value "active"
+    Write-Host ""
+    Write-Host "=== ERPNext is starting ===" -ForegroundColor Green
+    Write-Host "  The tray icon will show Ready when ERPNext is available."
+    Write-Host "  URL:   http://localhost:8000"
+    Write-Host "  Login: Administrator / admin"
+    Write-Host ""
+
+    # Done — skip entire reseller build flow
+    return
+}
+# ═══════════════════════════════════════════════════════════════════════
+# RESELLER MODE: Build from scratch (existing behavior)
+# ═══════════════════════════════════════════════════════════════════════
+
 # Step 1: WSL2 + Ubuntu + Podman
 Write-Host "Setting up WSL2 + Podman..."
 $bundleDir = Join-Path $scriptDir "bundle"
