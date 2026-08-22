@@ -125,21 +125,23 @@ if ($wslTar) {
     # Start containers
     Write-Host "Starting ERPNext..."
     Set-Content -Path "C:\ikuku\status.txt" -Value "starting"
-    & $WSL -d $distroName -u root -- bash -c "podman start ikuku_mariadb_1 ikuku_redis_1 ikuku_frappe_1 2>/dev/null || (cd /opt/ikuku && podman-compose up -d 2>/dev/null)"
+    & $WSL -d $distroName -u root -- bash -c 'podman start ikuku_mariadb_1 ikuku_redis_1 ikuku_frappe_1 2>/dev/null || (cd /opt/ikuku && podman-compose up -d 2>/dev/null)'
 
     # Port forwarding
-    $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null).Trim().Split(' ')[0]
+    $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null)
+    if ($wslIp) { $wslIp = $wslIp.Trim().Split(' ')[0] }
     if ($wslIp) {
         netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null
     }
-    netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
+    $fwRule = 'netsh advfirewall firewall add rule name="ikuku" dir=in action=allow protocol=TCP localport=8000'
+    Invoke-Expression "$fwRule 2>&1" | Out-Null
 
     # Copy ikuku.conf to working directory
     $confSource = Join-Path $scriptDir "ikuku.conf"
     if (Test-Path $confSource) { Copy-Item $confSource "C:\ikuku\ikuku.conf" -Force }
 
     # Kiro CLI activation check
-    $kiroActive = & $WSL -d $distroName -u root -- bash -c "test -f /opt/ikuku/shared/kiro-cli && /opt/ikuku/shared/kiro-cli --version 2>/dev/null && echo KIRO_OK" 2>$null
+    $kiroActive = & $WSL -d $distroName -u root -- bash -c 'test -f /opt/ikuku/shared/kiro-cli && /opt/ikuku/shared/kiro-cli --version 2>/dev/null && echo KIRO_OK' 2>$null
     if ($kiroActive -match "KIRO_OK") {
         Write-Host "  Kiro CLI: available (Master of Ceremonies ready)" -ForegroundColor Cyan
     }
