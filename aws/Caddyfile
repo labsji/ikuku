@@ -1,0 +1,24 @@
+# Caddyfile - Reverse proxy for Frappe bench
+# If a domain is provided at deploy time, this file is updated by init-sqlite.sh
+# to replace :80 with the actual domain (enabling automatic HTTPS via Let's Encrypt).
+
+:80 {
+    # Frappe web application
+    reverse_proxy localhost:8000
+
+    # Frappe socketio (realtime updates)
+    @websockets {
+        path /socket.io/*
+    }
+    reverse_proxy @websockets localhost:9000
+
+    # Encode responses
+    encode gzip
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

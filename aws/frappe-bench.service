@@ -1,0 +1,19 @@
+[Unit]
+Description=Frappe Bench
+After=network.target redis6.service
+Wants=redis6.service
+
+[Service]
+Type=simple
+User=frappe
+Group=frappe
+WorkingDirectory=/home/frappe/frappe-bench
+ExecStart=/home/frappe/.local/bin/bench start
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PATH=/home/frappe/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
