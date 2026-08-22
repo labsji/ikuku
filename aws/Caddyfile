@@ -1,8 +1,8 @@
 # Caddyfile - Reverse proxy for Frappe bench
-# If a domain is provided at deploy time, this file is updated by init-sqlite.sh
-# to replace :80 with the actual domain (enabling automatic HTTPS via Let's Encrypt).
+# At deploy time, init-sqlite.sh replaces {{SITE_ADDRESS}} with the actual
+# domain name (enabling automatic HTTPS via Let's Encrypt) or :80 for IP access.
 
-:80 {
+{{SITE_ADDRESS}} {
     # Frappe web application
     reverse_proxy localhost:8000
 

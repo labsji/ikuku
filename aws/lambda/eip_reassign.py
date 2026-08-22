@@ -4,6 +4,10 @@ EIP Reassignment Lambda Handler
 Monitors EC2 instance state-change events via EventBridge and reassigns
 a dedicated Elastic IP to the currently running spot instance in the ASG.
 
+Includes retry logic for transient failures (e.g., instance networking not
+yet ready) and idempotency checks to avoid unnecessary disassociate/reassociate
+cycles when the EIP is already correctly bound.
+
 Environment Variables:
     EIP_ALLOCATION_ID: The Allocation ID of the Elastic IP to manage
     ASG_NAME: The name of the Auto Scaling Group to monitor
@@ -11,6 +15,7 @@ Environment Variables:
 
 import boto3
 import os
+import time
 import logging
 
 logger = logging.getLogger()
@@ -18,6 +23,9 @@ logger.setLevel(logging.INFO)
 
 ec2 = boto3.client('ec2')
 autoscaling = boto3.client('autoscaling')
+
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 2
 
 
 def handler(event, context):
@@ -65,18 +73,34 @@ def handler(event, context):
     addresses = ec2.describe_addresses(AllocationIds=[allocation_id])
     address = addresses['Addresses'][0]
 
+    # Check if EIP is already associated with this instance (idempotent)
+    current_instance = address.get('InstanceId')
+    if current_instance == instance_id:
+        logger.info(f"EIP already associated with {instance_id}. No action needed.")
+        return {'statusCode': 200, 'body': 'EIP already correct'}
+
     # Disassociate if currently associated with another instance
     association_id = address.get('AssociationId')
     if association_id:
         logger.info(f"Disassociating EIP from previous instance: {association_id}")
         ec2.disassociate_address(AssociationId=association_id)
 
-    # Associate EIP with new running instance
-    logger.info(f"Associating EIP {allocation_id} with instance {instance_id}")
-    ec2.associate_address(
-        AllocationId=allocation_id,
-        InstanceId=instance_id
-    )
+    # Associate EIP with new running instance (with retry for networking readiness)
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(f"Associating EIP {allocation_id} with {instance_id} (attempt {attempt})")
+            ec2.associate_address(
+                AllocationId=allocation_id,
+                InstanceId=instance_id
+            )
+            logger.info(f"EIP successfully reassigned to {instance_id}")
+            return {'statusCode': 200, 'body': f'EIP assigned to {instance_id}'}
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Attempt {attempt} failed: {e}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS * attempt)
 
-    logger.info(f"EIP successfully reassigned to {instance_id}")
-    return {'statusCode': 200, 'body': f'EIP assigned to {instance_id}'}
+    logger.error(f"All {MAX_RETRIES} attempts failed. Last error: {last_error}")
+    raise last_error

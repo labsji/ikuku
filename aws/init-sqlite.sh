@@ -66,15 +66,17 @@ su - frappe -c "
     bench set-redis-socketio-host redis://localhost:6379
 "
 
-# Remove redis from Procfile (system redis used instead)
-sed -i '/redis/d' "$BENCH_DIR/Procfile"
+# Remove redis entries from Procfile (system redis used instead)
+# Use ^redis_ to match only redis process entries, not other lines containing "redis"
+sed -i '/^redis_/d' "$BENCH_DIR/Procfile"
 
 # --- Create site with SQLite ---
+ADMIN_PWD="${ADMIN_PASSWORD:-admin}"
 echo "Creating site '$SITE' with SQLite backend..."
 su - frappe -c "
     export PATH=\$HOME/.local/bin:\$PATH
     cd $BENCH_DIR
-    bench new-site $SITE --db-type sqlite --admin-password admin
+    bench new-site $SITE --db-type sqlite --admin-password '$ADMIN_PWD'
     bench use $SITE
 "
 
@@ -123,9 +125,11 @@ if [ -f "$SCRIPT_DIR/Caddyfile" ]; then
     cp "$SCRIPT_DIR/Caddyfile" /etc/caddy/Caddyfile
 fi
 
-# Set domain in Caddyfile if provided
+# Set domain in Caddyfile if provided, otherwise default to :80
 if [ -n "$DOMAIN" ]; then
-    sed -i "s/:80/$DOMAIN/" /etc/caddy/Caddyfile
+    sed -i "s/{{SITE_ADDRESS}}/$DOMAIN/" /etc/caddy/Caddyfile
+else
+    sed -i "s/{{SITE_ADDRESS}}/:80/" /etc/caddy/Caddyfile
 fi
 
 systemctl enable caddy
@@ -142,7 +146,7 @@ systemctl start frappe-bench
 
 echo "=== Frappe V16 SQLite setup complete ==="
 echo "Site: $SITE"
-echo "Admin password: admin"
+echo "Admin password: (set via ADMIN_PASSWORD environment variable)"
 if [ -n "$DOMAIN" ]; then
     echo "URL: https://$DOMAIN"
 else
