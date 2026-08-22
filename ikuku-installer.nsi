@@ -126,6 +126,7 @@ Section "Install"
 
     ; Core scripts
     File "install.ps1"
+    File "install-prospect.ps1"
     File "ikuku-service.ps1"
     File "start.ps1"
     File "stop.ps1"
@@ -155,8 +156,16 @@ Section "Install"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "${WLCOMPANY}"
 
-    ; Run installer with selected apps
+    ; Detect prospect mode: if a .tar file exists alongside the installer exe
+    ; Use prospect flow (import dump) instead of build-from-scratch flow
+    IfFileExists "$EXEDIR\*wsl*.tar" 0 +4
+        ; Prospect mode: import preconfigured WSL dump
+        File "install-prospect.ps1"
+        nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install-prospect.ps1" -TarPath "$EXEDIR\ikuku-wsl.tar"'
+        Goto InstallDone
+    ; Reseller mode: build from scratch
     nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
+    InstallDone:
     Pop $0
     ${If} $0 != "0"
         SetDetailsView show
