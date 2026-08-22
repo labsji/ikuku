@@ -90,5 +90,4 @@ jobs:
         with:
           files: |
             ikuku-kiro-lite.exe
-            ikuku-kiro-full.zip
           generate_release_notes: true
