@@ -3,6 +3,5 @@
 *.msi
 *.appx
 bundle/
-aws/
 __pycache__
 mel-seed.repl

@@ -1,0 +1,339 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Cost-optimized Frappe V16 deployment on ARM Spot Instance (t4g.nano)
+  with dedicated Elastic IP and automatic EIP reassignment via Lambda.
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access
+
+  AllowedSSHCidr:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: CIDR block allowed to SSH into the instance
+    AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/\d{1,2}'
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy resources into
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for the EC2 instance (must be in the specified VPC)
+
+  InstanceType:
+    Type: String
+    Default: t4g.nano
+    Description: EC2 instance type (ARM/Graviton)
+    AllowedValues:
+      - t4g.nano
+      - t4g.micro
+      - t4g.small
+
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Optional domain name for the Frappe site
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, '']]
+
+Resources:
+  # --- Elastic IP ---
+  FrappeEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-frappe-eip'
+
+  # --- Security Group ---
+  FrappeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Frappe instance - HTTP, HTTPS, SSH
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: HTTPS
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCidr
+          Description: SSH
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-frappe-sg'
+
+  # --- IAM Instance Profile ---
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-instance-role'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  # --- Launch Template ---
+  FrappeLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64}}'
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyPairName
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        SecurityGroupIds:
+          - !GetAtt FrappeSecurityGroup.GroupId
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: persistent
+            InstanceInterruptionBehavior: stop
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${AWS::StackName}-frappe-spot'
+              - Key: Project
+                Value: ikuku-frappe
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -e
+
+            echo "=== Frappe ARM Spot Instance Bootstrap ==="
+
+            # Install Docker
+            dnf update -y
+            dnf install -y docker git
+            systemctl enable docker
+            systemctl start docker
+
+            # Install Docker Compose plugin
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+            # Clone the ikuku repo
+            cd /opt
+            git clone https://github.com/labsji/ikuku.git || true
+            cd /opt/ikuku
+
+            # Run init script (created in FEAT-002)
+            if [ -f aws/init-sqlite.sh ]; then
+              chmod +x aws/init-sqlite.sh
+              bash aws/init-sqlite.sh "${DomainName}"
+            else
+              echo "init-sqlite.sh not found - pull latest or deploy manually"
+            fi
+
+            echo "=== Bootstrap complete ==="
+
+  # --- Auto Scaling Group ---
+  FrappeASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${AWS::StackName}-frappe-asg'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref FrappeLaunchTemplate
+        Version: !GetAtt FrappeLaunchTemplate.LatestVersionNumber
+      MinSize: '1'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      VPCZoneIdentifier:
+        - !Ref SubnetId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-frappe-spot'
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: ikuku-frappe
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+
+  # --- Lambda IAM Role ---
+  EIPLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EIPManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeAddresses
+                  - ec2:AssociateAddress
+                  - ec2:DisassociateAddress
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - autoscaling:DescribeAutoScalingGroups
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-eip-lambda-role'
+
+  # --- Lambda Function ---
+  EIPReassignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-eip-reassign'
+      Runtime: python3.12
+      Handler: index.handler
+      Architectures:
+        - arm64
+      Role: !GetAtt EIPLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          EIP_ALLOCATION_ID: !GetAtt FrappeEIP.AllocationId
+          ASG_NAME: !Sub '${AWS::StackName}-frappe-asg'
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ec2 = boto3.client('ec2')
+          autoscaling = boto3.client('autoscaling')
+
+
+          def handler(event, context):
+              """Handle EC2 instance state-change events and reassign EIP."""
+              logger.info(f"Received event: {event}")
+
+              detail = event.get('detail', {})
+              instance_id = detail.get('instance-id')
+              state = detail.get('state')
+
+              if state != 'running':
+                  logger.info(f"Instance {instance_id} state is '{state}', not 'running'. Skipping.")
+                  return {'statusCode': 200, 'body': 'Not a running state event'}
+
+              # Verify instance belongs to our ASG
+              asg_name = os.environ['ASG_NAME']
+              asg_response = autoscaling.describe_auto_scaling_groups(
+                  AutoScalingGroupNames=[asg_name]
+              )
+
+              asg_groups = asg_response.get('AutoScalingGroups', [])
+              if not asg_groups:
+                  logger.error(f"ASG {asg_name} not found")
+                  return {'statusCode': 404, 'body': 'ASG not found'}
+
+              asg_instance_ids = [
+                  inst['InstanceId']
+                  for inst in asg_groups[0].get('Instances', [])
+              ]
+
+              if instance_id not in asg_instance_ids:
+                  logger.info(f"Instance {instance_id} not in ASG {asg_name}. Skipping.")
+                  return {'statusCode': 200, 'body': 'Instance not in ASG'}
+
+              # Get current EIP association
+              allocation_id = os.environ['EIP_ALLOCATION_ID']
+              addresses = ec2.describe_addresses(AllocationIds=[allocation_id])
+              address = addresses['Addresses'][0]
+
+              # Disassociate if currently associated
+              association_id = address.get('AssociationId')
+              if association_id:
+                  logger.info(f"Disassociating EIP from previous instance: {association_id}")
+                  ec2.disassociate_address(AssociationId=association_id)
+
+              # Associate EIP with new instance
+              logger.info(f"Associating EIP {allocation_id} with instance {instance_id}")
+              ec2.associate_address(
+                  AllocationId=allocation_id,
+                  InstanceId=instance_id
+              )
+
+              logger.info(f"EIP successfully reassigned to {instance_id}")
+              return {'statusCode': 200, 'body': f'EIP assigned to {instance_id}'}
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-eip-reassign'
+
+  # --- EventBridge Rule ---
+  EC2StateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-ec2-running-rule'
+      Description: Trigger Lambda when an EC2 instance enters running state
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+        detail:
+          state:
+            - running
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt EIPReassignFunction.Arn
+          Id: EIPReassignTarget
+
+  # --- Lambda Permission for EventBridge ---
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EIPReassignFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EC2StateChangeRule.Arn
+
+Outputs:
+  ElasticIP:
+    Description: Dedicated Elastic IP for the Frappe instance
+    Value: !Ref FrappeEIP
+
+  WebURL:
+    Description: URL to access the Frappe application
+    Value: !If
+      - HasDomain
+      - !Sub 'https://${DomainName}'
+      - !Sub 'http://${FrappeEIP}'
