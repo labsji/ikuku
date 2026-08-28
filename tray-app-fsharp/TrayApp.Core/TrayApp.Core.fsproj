@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>TrayApp</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="DocType/Types.fs" />
+    <Compile Include="DocType/Parser.fs" />
+    <Compile Include="DocType/Database.fs" />
+    <Compile Include="Sync/PubSub.fs" />
+    <Compile Include="Sync/SyncEngine.fs" />
+    <Compile Include="Kiro/KiroClient.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>
