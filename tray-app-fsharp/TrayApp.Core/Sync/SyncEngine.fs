@@ -16,9 +16,28 @@ type SyncEngine(pubsub: PubSubClient, conn: Microsoft.Data.Sqlite.SqliteConnecti
         with get () = lastSyncTimestamp
         and set v = lastSyncTimestamp <- v
 
+    /// Check whether a document has all required fields populated.
+    member private _.HasRequiredFields (dt: DocType) (doc: Document) : bool =
+        let requiredFields =
+            FieldHelpers.dataFields dt
+            |> List.filter (fun f -> f.Reqd = 1)
+
+        requiredFields
+        |> List.forall (fun f ->
+            doc.ContainsKey(f.Fieldname)
+            && doc[f.Fieldname] <> null
+            && (string doc[f.Fieldname]) <> "")
+
     /// Apply a remote change to the local database.
     /// Uses last-write-wins: if remote timestamp is newer, apply the change.
-    member _.ApplyRemoteChange(msg: SyncMessage) : bool =
+    member this.ApplyRemoteChange(msg: SyncMessage) : bool =
+        // Skip self-originated messages
+        if not (String.IsNullOrEmpty(msg.Sender))
+           && not (String.IsNullOrEmpty(pubsub.ClientId))
+           && msg.Sender = pubsub.ClientId then
+            false
+        else
+
         match doctypeMap.TryGetValue(msg.DocType) with
         | false, _ -> false
         | true, dt ->
@@ -37,7 +56,8 @@ type SyncEngine(pubsub: PubSubClient, conn: Microsoft.Data.Sqlite.SqliteConnecti
                 // Last-write-wins: check if remote timestamp is newer
                 match Database.read conn dt msg.Name with
                 | None ->
-                    // Document doesn't exist locally, create it
+                    // Document doesn't exist locally - only create from update
+                    // if we have all required fields to avoid incomplete records.
                     let doc = Document()
 
                     if msg.Data <> null then
@@ -45,8 +65,13 @@ type SyncEngine(pubsub: PubSubClient, conn: Microsoft.Data.Sqlite.SqliteConnecti
                             doc[kv.Key] <- kv.Value
 
                     doc["name"] <- msg.Name
-                    Database.create conn dt doc |> ignore
-                    true
+
+                    if this.HasRequiredFields dt doc then
+                        Database.create conn dt doc |> ignore
+                        true
+                    else
+                        // Skip: partial update data lacks required fields
+                        false
                 | Some existingDoc ->
                     let localModified =
                         if existingDoc.ContainsKey("modified") && existingDoc["modified"] <> null then
@@ -95,11 +120,30 @@ type SyncEngine(pubsub: PubSubClient, conn: Microsoft.Data.Sqlite.SqliteConnecti
             do! pubsub.SendAsync(msg, ct)
         }
 
+    /// Perform catch-up by fetching missed sync log entries from the server.
+    member this.CatchUpAsync(ct: CancellationToken) =
+        task {
+            let! missedMessages = pubsub.FetchSyncLogAsync(lastSyncTimestamp, ct)
+
+            for msg in missedMessages do
+                this.ApplyRemoteChange(msg) |> ignore
+
+                if not (String.IsNullOrEmpty(msg.Timestamp)) then
+                    lastSyncTimestamp <- msg.Timestamp
+        }
+
     /// Start the sync engine - subscribes to incoming messages.
     member this.Start() =
         pubsub.MessageReceived.Add(fun msg ->
             this.ApplyRemoteChange(msg) |> ignore
             lastSyncTimestamp <- msg.Timestamp)
+
+        // Perform catch-up after reconnection.
+        pubsub.ConnectionStateChanged.Add(fun connected ->
+            if connected then
+                this.CatchUpAsync(CancellationToken.None)
+                |> Async.AwaitTask
+                |> Async.Start)
 
     /// Update the last sync timestamp.
     member _.UpdateTimestamp(timestamp: string) = lastSyncTimestamp <- timestamp

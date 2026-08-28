@@ -18,7 +18,8 @@ let ``SyncMessage serialization produces correct JSON format`` () =
           DocType = "Wiki Page"
           Name = "page-1"
           Data = data
-          Timestamp = "2024-01-01T00:00:00Z" }
+          Timestamp = "2024-01-01T00:00:00Z"
+          Sender = "" }
 
     let bytes = SyncMessage.serialize msg
     let json = Encoding.UTF8.GetString(bytes)
@@ -42,7 +43,8 @@ let ``SyncMessage deserialization round-trips correctly`` () =
           DocType = "Wiki Page"
           Name = "doc-123"
           Data = data
-          Timestamp = "2024-06-15T12:30:00Z" }
+          Timestamp = "2024-06-15T12:30:00Z"
+          Sender = "" }
 
     let bytes = SyncMessage.serialize original
 
@@ -102,7 +104,8 @@ let ``SyncMessage format matches Go server format`` () =
           DocType = "Wiki Page"
           Name = "test"
           Data = data
-          Timestamp = "2024-01-01T00:00:00Z" }
+          Timestamp = "2024-01-01T00:00:00Z"
+          Sender = "" }
 
     let bytes = SyncMessage.serialize msg
     let json = Encoding.UTF8.GetString(bytes)
@@ -198,7 +201,8 @@ let ``SyncEngine applies remote create`` () =
           DocType = "Wiki Page"
           Name = "remote-1"
           Data = data
-          Timestamp = "2024-06-15T12:00:00Z" }
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "" }
 
     let applied = engine.ApplyRemoteChange(msg)
     Assert.True(applied)
@@ -274,7 +278,8 @@ let ``SyncEngine last-write-wins conflict resolution`` () =
           DocType = "Wiki Page"
           Name = "conflict-page"
           Data = olderData
-          Timestamp = "2024-06-15T12:00:00Z" }
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "" }
 
     let applied = engine.ApplyRemoteChange(olderMsg)
     Assert.False(applied)
@@ -293,7 +298,8 @@ let ``SyncEngine last-write-wins conflict resolution`` () =
           DocType = "Wiki Page"
           Name = "conflict-page"
           Data = newerData
-          Timestamp = "2024-06-15T16:00:00Z" }
+          Timestamp = "2024-06-15T16:00:00Z"
+          Sender = "" }
 
     let applied2 = engine.ApplyRemoteChange(newerMsg)
     Assert.True(applied2)
@@ -304,3 +310,209 @@ let ``SyncEngine last-write-wins conflict resolution`` () =
     | None -> Assert.Fail("Document not found after update")
 
     (pubsub :> System.IDisposable).Dispose()
+
+[<Fact>]
+let ``SyncEngine skips self-originated messages`` () =
+    use conn = Database.openInMemory ()
+
+    let dt =
+        { Name = "Wiki Page"
+          Module = "Wiki"
+          Autoname = "hash"
+          NamingRule = "Random"
+          IsSingle = 0
+          IsTable = 0
+          Fields =
+            [ { Fieldname = "title"
+                Fieldtype = "Data"
+                Label = "Title"
+                Options = ""
+                Reqd = 1
+                Unique = 0
+                Default = ""
+                ReadOnly = 0
+                InListView = 0
+                InPreview = 0
+                InStandardFilter = 0
+                Description = ""
+                FetchFrom = "" } ]
+          FieldOrder = []
+          Permissions = []
+          HasWebView = 0
+          IsPublishedField = ""
+          TrackChanges = 0
+          TitleField = ""
+          SortField = ""
+          SortOrder = ""
+          AllowRename = 0
+          AllowImport = 0
+          AllowGuestToView = 0
+          Creation = ""
+          Modified = ""
+          ModifiedBy = ""
+          Owner = "" }
+
+    Database.migrate conn dt
+
+    let pubsub = new PubSubClient("ws://localhost:9999", "test-token")
+    pubsub.ClientId <- "admin"
+    let engine = SyncEngine(pubsub, conn, [ dt ])
+
+    let data = Dictionary<string, obj>()
+    data["title"] <- "Self Message"
+
+    // Message from self - should be skipped
+    let selfMsg =
+        { Action = "create"
+          DocType = "Wiki Page"
+          Name = "self-page"
+          Data = data
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "admin" }
+
+    let applied = engine.ApplyRemoteChange(selfMsg)
+    Assert.False(applied)
+
+    // Document should NOT exist
+    match Database.read conn dt "self-page" with
+    | Some _ -> Assert.Fail("Self-originated message should not create document")
+    | None -> ()
+
+    // Message from another user - should be applied
+    let otherMsg =
+        { Action = "create"
+          DocType = "Wiki Page"
+          Name = "other-page"
+          Data = data
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "other-user" }
+
+    let applied2 = engine.ApplyRemoteChange(otherMsg)
+    Assert.True(applied2)
+
+    match Database.read conn dt "other-page" with
+    | Some doc -> Assert.Equal("Self Message", doc["title"] :?> string)
+    | None -> Assert.Fail("Message from other user should create document")
+
+    (pubsub :> System.IDisposable).Dispose()
+
+[<Fact>]
+let ``SyncEngine rejects update-as-create when required fields are missing`` () =
+    use conn = Database.openInMemory ()
+
+    let dt =
+        { Name = "Wiki Page"
+          Module = "Wiki"
+          Autoname = "hash"
+          NamingRule = "Random"
+          IsSingle = 0
+          IsTable = 0
+          Fields =
+            [ { Fieldname = "title"
+                Fieldtype = "Data"
+                Label = "Title"
+                Options = ""
+                Reqd = 1
+                Unique = 0
+                Default = ""
+                ReadOnly = 0
+                InListView = 0
+                InPreview = 0
+                InStandardFilter = 0
+                Description = ""
+                FetchFrom = "" }
+              { Fieldname = "content"
+                Fieldtype = "Markdown Editor"
+                Label = "Content"
+                Options = ""
+                Reqd = 1
+                Unique = 0
+                Default = ""
+                ReadOnly = 0
+                InListView = 0
+                InPreview = 0
+                InStandardFilter = 0
+                Description = ""
+                FetchFrom = "" } ]
+          FieldOrder = []
+          Permissions = []
+          HasWebView = 0
+          IsPublishedField = ""
+          TrackChanges = 0
+          TitleField = ""
+          SortField = ""
+          SortOrder = ""
+          AllowRename = 0
+          AllowImport = 0
+          AllowGuestToView = 0
+          Creation = ""
+          Modified = ""
+          ModifiedBy = ""
+          Owner = "" }
+
+    Database.migrate conn dt
+
+    let pubsub = new PubSubClient("ws://localhost:9999", "test-token")
+    let engine = SyncEngine(pubsub, conn, [ dt ])
+
+    // Update for a doc that doesn't exist locally, with only partial data (missing "content")
+    let partialData = Dictionary<string, obj>()
+    partialData["title"] <- "Partial Update"
+
+    let updateMsg =
+        { Action = "update"
+          DocType = "Wiki Page"
+          Name = "missing-page"
+          Data = partialData
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "" }
+
+    let applied = engine.ApplyRemoteChange(updateMsg)
+    Assert.False(applied) // Should reject because "content" is required but missing
+
+    // Document should NOT exist
+    match Database.read conn dt "missing-page" with
+    | Some _ -> Assert.Fail("Partial update should not create document with missing required fields")
+    | None -> ()
+
+    // Update with all required fields should succeed
+    let fullData = Dictionary<string, obj>()
+    fullData["title"] <- "Full Update"
+    fullData["content"] <- "Has all fields"
+
+    let fullUpdateMsg =
+        { Action = "update"
+          DocType = "Wiki Page"
+          Name = "complete-page"
+          Data = fullData
+          Timestamp = "2024-06-15T12:00:00Z"
+          Sender = "" }
+
+    let applied2 = engine.ApplyRemoteChange(fullUpdateMsg)
+    Assert.True(applied2) // Should succeed because all required fields are present
+
+    match Database.read conn dt "complete-page" with
+    | Some doc ->
+        Assert.Equal("Full Update", doc["title"] :?> string)
+        Assert.Equal("Has all fields", doc["content"] :?> string)
+    | None -> Assert.Fail("Document should be created when all required fields are present")
+
+    (pubsub :> System.IDisposable).Dispose()
+
+[<Fact>]
+let ``SyncMessage sender field is included in serialization`` () =
+    let data = Dictionary<string, obj>()
+    data["title"] <- "Test"
+
+    let msg =
+        { Action = "create"
+          DocType = "Wiki Page"
+          Name = "test-page"
+          Data = data
+          Timestamp = "2024-01-01T00:00:00Z"
+          Sender = "admin" }
+
+    let bytes = SyncMessage.serialize msg
+    let json = Encoding.UTF8.GetString(bytes)
+
+    Assert.Contains("\"sender\":\"admin\"", json)

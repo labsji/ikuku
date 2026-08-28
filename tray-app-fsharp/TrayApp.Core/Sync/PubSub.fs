@@ -2,6 +2,7 @@ namespace TrayApp.Sync
 
 open System
 open System.Net.WebSockets
+open System.Net.Http
 open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -20,7 +21,9 @@ type SyncMessage =
       [<JsonPropertyName("data")>]
       Data: System.Collections.Generic.Dictionary<string, obj>
       [<JsonPropertyName("timestamp")>]
-      Timestamp: string }
+      Timestamp: string
+      [<JsonPropertyName("sender")>]
+      Sender: string }
 
 module SyncMessage =
 
@@ -30,7 +33,8 @@ module SyncMessage =
           DocType = doctype
           Name = name
           Data = data
-          Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") }
+          Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+          Sender = "" }
 
     /// Serializes a SyncMessage to JSON bytes.
     let serialize (msg: SyncMessage) : byte[] =
@@ -54,6 +58,29 @@ module SyncMessage =
         with ex ->
             Error(sprintf "Deserialize error: %s" ex.Message)
 
+/// Response envelope for the sync_log API endpoint.
+[<CLIMutable>]
+type SyncLogResponse =
+    { [<JsonPropertyName("data")>]
+      Data: SyncLogEntry[] }
+
+/// A single entry from the server sync_log table.
+and [<CLIMutable>] SyncLogEntry =
+    { [<JsonPropertyName("id")>]
+      Id: int64
+      [<JsonPropertyName("action")>]
+      Action: string
+      [<JsonPropertyName("doctype")>]
+      DocType: string
+      [<JsonPropertyName("name")>]
+      Name: string
+      [<JsonPropertyName("data")>]
+      Data: System.Collections.Generic.Dictionary<string, obj>
+      [<JsonPropertyName("timestamp")>]
+      Timestamp: string
+      [<JsonPropertyName("user")>]
+      User: string }
+
 /// WebSocket-based PubSub client for document synchronization.
 type PubSubClient(serverUrl: string, token: string) =
     let mutable ws: ClientWebSocket option = None
@@ -61,6 +88,10 @@ type PubSubClient(serverUrl: string, token: string) =
     let maxReconnectDelay = 30000 // Max 30 seconds
     let messageReceived = Event<SyncMessage>()
     let connectionStateChanged = Event<bool>()
+    let httpClient = new HttpClient()
+
+    /// The user identity of this client (set after authentication).
+    member val ClientId = "" with get, set
 
     /// Event fired when a sync message is received.
     [<CLIEvent>]
@@ -123,6 +154,39 @@ type PubSubClient(serverUrl: string, token: string) =
             | None -> ()
         }
 
+    /// Fetch missed sync log entries from the server since the given timestamp.
+    member _.FetchSyncLogAsync(since: string, ct: CancellationToken) : Task<SyncMessage list> =
+        task {
+            try
+                let httpBase = serverUrl.Replace("ws://", "http://").Replace("wss://", "https://")
+                let url = sprintf "%s/api/method/sync_log?since=%s" httpBase (Uri.EscapeDataString(since))
+                use request = new HttpRequestMessage(HttpMethod.Get, url)
+                request.Headers.Add("Cookie", sprintf "sid=%s" token)
+                let! response = httpClient.SendAsync(request, ct)
+
+                if response.IsSuccessStatusCode then
+                    let! body = response.Content.ReadAsStringAsync(ct)
+                    let logResponse = JsonSerializer.Deserialize<SyncLogResponse>(body)
+
+                    if logResponse.Data <> null then
+                        return
+                            logResponse.Data
+                            |> Array.map (fun entry ->
+                                { Action = entry.Action
+                                  DocType = entry.DocType
+                                  Name = entry.Name
+                                  Data = entry.Data
+                                  Timestamp = entry.Timestamp
+                                  Sender = entry.User })
+                            |> Array.toList
+                    else
+                        return []
+                else
+                    return []
+            with _ ->
+                return []
+        }
+
     /// Disconnect from the server.
     member _.DisconnectAsync(ct: CancellationToken) =
         task {
@@ -167,3 +231,5 @@ type PubSubClient(serverUrl: string, token: string) =
                 client.Dispose()
                 ws <- None
             | None -> ()
+
+            httpClient.Dispose()
