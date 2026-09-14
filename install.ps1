@@ -38,8 +38,10 @@ if (Test-Path "$scriptDir\ikuku-tray.exe") {
 }
 if (Test-Path $trayExe) {
     Start-Process $trayExe
-    # Register auto-start on login
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ikuku /t REG_SZ /d $trayExe /f 2>$null
+    # Register auto-start on login (registry provider is Stop-safe; reg.exe is not)
+    $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }
+    New-ItemProperty -Path $runKey -Name "ikuku" -Value $trayExe -PropertyType String -Force | Out-Null
 }
 
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
@@ -68,10 +70,9 @@ if ($wslTar) {
     Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
 
     # Ensure WSL2 is installed (just the kernel, no distro needed). On a pristine
-    # machine this enables Windows features + installs the real WSL2 package and may
-    # require a reboot; wsl-setup.ps1 exits 42 in that case.
+    # machine this enables Windows features + installs the real WSL2 package, which
+    # may require a reboot before the real binary appears.
     & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro
-    $wslSetupExit = $LASTEXITCODE
 
     # Re-resolve WSL binary: on a pristine machine $WSL may have pointed at the inbox
     # stub (C:\Windows\System32\wsl.exe). After wsl-setup installs the real WSL2
@@ -87,7 +88,12 @@ if ($wslTar) {
         Write-Host "WSL2 needs a reboot to finish installing. The install will resume after restart." -ForegroundColor Yellow
         Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
         $resume = "powershell -ExecutionPolicy Bypass -File `"$scriptDir\install.ps1`" -Apps `"$Apps`" -LaunchDir `"$LaunchDir`""
-        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v ikuku-resume /t REG_SZ /d $resume /f 2>$null | Out-Null
+        # Use the registry provider (cmdlet) rather than reg.exe: reg.exe writes to
+        # stderr in ways that trip $ErrorActionPreference='Stop' and abort before the
+        # value is written. New-ItemProperty is Stop-safe on success.
+        $runOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+        if (-not (Test-Path $runOnceKey)) { New-Item -Path $runOnceKey -Force | Out-Null }
+        New-ItemProperty -Path $runOnceKey -Name "ikuku-resume" -Value $resume -PropertyType String -Force | Out-Null
         return
     }
     Write-Host "  Using WSL binary: $WSL"

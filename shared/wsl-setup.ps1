@@ -1,6 +1,12 @@
 # shared/wsl-setup.ps1 - Common WSL2 + podman setup for all Frappe apps
 param([string]$MemoryGB = "12", [string]$SwapGB = "4", [switch]$SkipDistro)
 
+# Native commands here (wsl.exe, dism.exe) legitimately write to stderr and return
+# non-zero exit codes (e.g. "reboot required"). If a caller set ErrorActionPreference
+# to 'Stop', that stderr becomes a terminating NativeCommandError and kills this script
+# mid-run. Force 'Continue' so we control the flow ourselves via explicit checks.
+$ErrorActionPreference = "Continue"
+
 # On a pristine Windows 11, C:\Windows\System32\wsl.exe is an INBOX STUB that only
 # knows how to bootstrap `wsl --install`. The real WSL2 (with a working --import) is
 # the Store/MSI package installed at C:\Program Files\WSL\wsl.exe. We must detect the
@@ -29,11 +35,12 @@ if (-not $WSL) {
         $WSL = $realWslPath
     } else {
         # Real WSL2 still not present - the VirtualMachinePlatform feature almost
-        # certainly needs a reboot to activate. Signal the caller to reboot & resume.
+        # certainly needs a reboot to activate. Return WITHOUT exiting so the caller
+        # (install.ps1) can detect the missing binary and drive the reboot/resume
+        # flow. Do NOT call 'exit' here: this script is invoked with '&', and 'exit'
+        # would terminate the parent install.ps1 too, skipping its reboot handling.
         Write-Host "WSL2 requires a reboot to finish installing (VirtualMachinePlatform)."
-        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot" -ErrorAction SilentlyContinue
-        Write-Error "REBOOT_REQUIRED: Windows features enabled; reboot then re-run the installer to resume."
-        exit 42
+        return
     }
 }
 
