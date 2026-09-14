@@ -41,46 +41,6 @@ if (Test-Path $trayExe) {
 
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
-# Step 0: Check WSL2 + container support
-$errors = @()
-if (-not $WSL) {
-    # WSL binary not found at all - unusual, check if Windows version supports it
-    $build = [System.Environment]::OSVersion.Version.Build
-    if ($build -lt 19041) {
-        $errors += "This Windows version does not support WSL2 (requires build 19041+)."
-    }
-    # Otherwise wsl-setup.ps1 will handle installation
-} else {
-# Basic WSL check - only fail on hardware issues, not "not installed" state
-$wslCheck = & $WSL --status 2>&1 | Out-String
-if ($wslCheck -match "not supported") {
-    $errors += "WSL2 is not available on this system (hardware virtualization may be disabled)."
-}
-# Check if any distro is running WSL1 (only matters if distros exist)
-$wslVersion = & $WSL -l -v 2>&1 | Out-String
-if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2" -and $wslVersion -notmatch "no installed") {
-    $errors += "WSL is running in version 1 mode. WSL2 required."
-}
-# Smoke-test: can podman actually create containers with networking?
-# Only test if podman is already installed (skip on fresh install - wsl-setup.ps1 handles it)
-if ($errors.Count -eq 0) {
-    $hasPodman = & $WSL -u root -- which podman 2>&1 | Out-String
-    if ($hasPodman -match "/podman") {
-        $nsTest = & $WSL -u root -- bash -c "podman run --rm alpine echo ok 2>&1" | Out-String
-        if ($nsTest -notmatch "ok") {
-            $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
-        }
-    }
-}
-} # end WSL found
-if ($errors.Count -gt 0) {
-    $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization (nested virt for VMs)`n- WSL2 with a real Linux kernel`n`nFiles have been extracted to: $scriptDir"
-    Write-Host "ERROR: $msg" -ForegroundColor Red
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show($msg, "ikuku - Installation Failed", "OK", "Error") | Out-Null
-    exit 1
-}
-
 # ═══════════════════════════════════════════════════════════════════════
 # PROSPECT MODE DETECTION
 # If a complete WSL filesystem tar exists alongside the installer,
@@ -98,6 +58,16 @@ if ($wslTar) {
 
     # Ensure WSL2 kernel is installed (just the kernel, no distro needed)
     & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro
+
+    # Re-resolve WSL binary: on a pristine machine $WSL may have pointed at the
+    # inbox stub (C:\Windows\System32\wsl.exe). After wsl-setup installs the real
+    # WSL2 package, the full binary lands at C:\Program Files\WSL\wsl.exe. Prefer it.
+    if (Test-Path "C:\Program Files\WSL\wsl.exe") {
+        $WSL = "C:\Program Files\WSL\wsl.exe"
+    } elseif (-not $WSL) {
+        $WSL = "wsl.exe"
+    }
+    Write-Host "  Using WSL binary: $WSL"
 
     # Prevent WSL auto-shutdown
     @("[wsl2]", "vmIdleTimeout=-1", "memory=12GB", "swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
@@ -160,6 +130,47 @@ if ($wslTar) {
     # Done — skip entire reseller build flow
     return
 }
+
+# Step 0: Check WSL2 + container support
+$errors = @()
+if (-not $WSL) {
+    # WSL binary not found at all - unusual, check if Windows version supports it
+    $build = [System.Environment]::OSVersion.Version.Build
+    if ($build -lt 19041) {
+        $errors += "This Windows version does not support WSL2 (requires build 19041+)."
+    }
+    # Otherwise wsl-setup.ps1 will handle installation
+} else {
+# Basic WSL check - only fail on hardware issues, not "not installed" state
+$wslCheck = & $WSL --status 2>&1 | Out-String
+if ($wslCheck -match "not supported") {
+    $errors += "WSL2 is not available on this system (hardware virtualization may be disabled)."
+}
+# Check if any distro is running WSL1 (only matters if distros exist)
+$wslVersion = & $WSL -l -v 2>&1 | Out-String
+if ($wslVersion -match "VERSION\s+1" -and $wslVersion -notmatch "VERSION\s+2" -and $wslVersion -notmatch "no installed") {
+    $errors += "WSL is running in version 1 mode. WSL2 required."
+}
+# Smoke-test: can podman actually create containers with networking?
+# Only test if podman is already installed (skip on fresh install - wsl-setup.ps1 handles it)
+if ($errors.Count -eq 0) {
+    $hasPodman = & $WSL -u root -- which podman 2>&1 | Out-String
+    if ($hasPodman -match "/podman") {
+        $nsTest = & $WSL -u root -- bash -c "podman run --rm alpine echo ok 2>&1" | Out-String
+        if ($nsTest -notmatch "ok") {
+            $errors += "Podman cannot start containers on this system.`n`nThis usually means the WSL2 kernel lacks full namespace support`n(e.g. EC2/cloud VMs without nested virtualization).`n`nDetails: $($nsTest.Trim())"
+        }
+    }
+}
+} # end WSL found
+if ($errors.Count -gt 0) {
+    $msg = "ikuku cannot install:`n`n" + ($errors -join "`n") + "`n`nRequirements:`n- Windows 10/11 or Server 2019+`n- Hardware virtualization (nested virt for VMs)`n- WSL2 with a real Linux kernel`n`nFiles have been extracted to: $scriptDir"
+    Write-Host "ERROR: $msg" -ForegroundColor Red
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show($msg, "ikuku - Installation Failed", "OK", "Error") | Out-Null
+    exit 1
+}
+
 # ═══════════════════════════════════════════════════════════════════════
 # RESELLER MODE: Build from scratch (existing behavior)
 # ═══════════════════════════════════════════════════════════════════════
