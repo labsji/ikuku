@@ -1,17 +1,40 @@
 # shared/wsl-setup.ps1 - Common WSL2 + podman setup for all Frappe apps
 param([string]$MemoryGB = "12", [string]$SwapGB = "4", [switch]$SkipDistro)
 
+# On a pristine Windows 11, C:\Windows\System32\wsl.exe is an INBOX STUB that only
+# knows how to bootstrap `wsl --install`. The real WSL2 (with a working --import) is
+# the Store/MSI package installed at C:\Program Files\WSL\wsl.exe. We must detect the
+# stub-only state and actually install real WSL2 - checking `Get-Command wsl.exe` is
+# NOT sufficient because the stub always satisfies it.
+$realWslPath = "C:\Program Files\WSL\wsl.exe"
 $WSL = $null
-if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
-elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = (Get-Command wsl.exe).Source }
+if (Test-Path $realWslPath) { $WSL = $realWslPath }
 
 if (-not $WSL) {
-    Write-Host "WSL not found. Installing WSL..."
-    wsl --install --no-distribution 2>$null
-    Start-Sleep 10
-    if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
-    elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = (Get-Command wsl.exe).Source }
-    if (-not $WSL) { Write-Error "WSL installation failed. Reboot and retry."; exit 1 }
+    Write-Host "Real WSL2 not found (only inbox stub present). Installing WSL2..."
+    # Ensure the underlying Windows features are enabled first - required before the
+    # WSL2 package can function. These may require a reboot on a fresh machine.
+    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>&1 | Out-Null
+    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>&1 | Out-Null
+
+    # Install the WSL2 package (kernel + real wsl.exe) without any distro.
+    # Use the inbox stub explicitly to bootstrap the real package.
+    & "$env:SystemRoot\System32\wsl.exe" --install --no-distribution 2>&1 | Out-Null
+    Start-Sleep 15
+    # Also try updating to pull the latest kernel if the package landed.
+    & "$env:SystemRoot\System32\wsl.exe" --update 2>&1 | Out-Null
+    Start-Sleep 5
+
+    if (Test-Path $realWslPath) {
+        $WSL = $realWslPath
+    } else {
+        # Real WSL2 still not present - the VirtualMachinePlatform feature almost
+        # certainly needs a reboot to activate. Signal the caller to reboot & resume.
+        Write-Host "WSL2 requires a reboot to finish installing (VirtualMachinePlatform)."
+        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot" -ErrorAction SilentlyContinue
+        Write-Error "REBOOT_REQUIRED: Windows features enabled; reboot then re-run the installer to resume."
+        exit 42
+    }
 }
 
 # WSL memory config
@@ -20,9 +43,9 @@ if (-not $WSL) {
 # Ensure WSL2 is the default (critical for multi-user scenarios)
 & $WSL --set-default-version 2 2>$null
 
-# In prospect mode (SkipDistro), we only need the WSL kernel — no Ubuntu distro
+# In prospect mode (SkipDistro), we only need the WSL kernel - no Ubuntu distro
 if ($SkipDistro) {
-    Write-Host "WSL2 kernel ready (prospect mode — distro will be imported from tar)"
+    Write-Host "WSL2 kernel ready (prospect mode - distro will be imported from tar)"
     return
 }
 

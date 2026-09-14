@@ -175,8 +175,10 @@ Section "Install"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "UninstallString" "$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ikuku" "Publisher" "${WLCOMPANY}"
 
-    ; Run installer with selected apps
-    nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps"'
+    ; Run installer with selected apps.
+    ; Pass the launch directory ($EXEDIR) so prospect-mode detection can find the
+    ; WSL filesystem tar, which ships alongside the .exe and is NOT copied into $INSTDIR.
+    nsExec::ExecToLog 'powershell -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1" -Apps "$SelectedApps" -LaunchDir "$EXEDIR"'
     Pop $0
     ${If} $0 != "0"
         SetDetailsView show

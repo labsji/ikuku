@@ -1,6 +1,9 @@
 # install.ps1 - ikuku: install Frappe apps on Windows
-# Usage: powershell -File install.ps1 -Apps "wiki,lms"
-param([string]$Apps = "wiki")
+# Usage: powershell -File install.ps1 -Apps "wiki,lms" [-LaunchDir "C:\path\next\to\exe"]
+# -LaunchDir is the directory the user launched the .exe from ($EXEDIR in NSIS).
+#   The prospect WSL filesystem tar ships alongside the .exe and is NOT copied into
+#   the install dir (too large), so we must search LaunchDir to find it.
+param([string]$Apps = "wiki", [string]$LaunchDir = "")
 
 $ErrorActionPreference = "Stop"
 $WSL = $null
@@ -41,14 +44,22 @@ if (Test-Path $trayExe) {
 
 Write-Host "Apps: $Apps | Port: $($conf.LMS_PORT)"
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 # PROSPECT MODE DETECTION
 # If a complete WSL filesystem tar exists alongside the installer,
-# import it directly. This is the fastest path — everything is pre-built.
+# import it directly. This is the fastest path - everything is pre-built.
 # The tar contains: Ubuntu + podman + images + volumes + ERPNext + niche data.
 # Created by: delegate runs evalkit build, exports WSL filesystem.
-# ═══════════════════════════════════════════════════════════════════════
-$wslTar = Get-ChildItem -Path $scriptDir, (Split-Path $scriptDir) -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
+# =======================================================================
+# Search order: the launch dir (where the .exe + tar live), then the script dir and
+# its parent, then Downloads as a last resort. LaunchDir is the primary location for
+# prospect kits since NSIS runs this script from $INSTDIR but the tar stays by the .exe.
+$tarSearchDirs = @()
+if ($LaunchDir -and (Test-Path $LaunchDir)) { $tarSearchDirs += $LaunchDir }
+$tarSearchDirs += $scriptDir
+$tarSearchDirs += (Split-Path $scriptDir)
+$tarSearchDirs = $tarSearchDirs | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+$wslTar = Get-ChildItem -Path $tarSearchDirs -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $wslTar) { $wslTar = Get-ChildItem -Path "$env:USERPROFILE\Downloads" -Filter "*wsl*.tar" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
 if ($wslTar) {
     Write-Host ""
@@ -56,16 +67,28 @@ if ($wslTar) {
     Write-Host "Found: $($wslTar.Name) ($([math]::Round($wslTar.Length / 1GB, 1)) GB)"
     Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
 
-    # Ensure WSL2 kernel is installed (just the kernel, no distro needed)
+    # Ensure WSL2 is installed (just the kernel, no distro needed). On a pristine
+    # machine this enables Windows features + installs the real WSL2 package and may
+    # require a reboot; wsl-setup.ps1 exits 42 in that case.
     & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro
+    $wslSetupExit = $LASTEXITCODE
 
-    # Re-resolve WSL binary: on a pristine machine $WSL may have pointed at the
-    # inbox stub (C:\Windows\System32\wsl.exe). After wsl-setup installs the real
-    # WSL2 package, the full binary lands at C:\Program Files\WSL\wsl.exe. Prefer it.
+    # Re-resolve WSL binary: on a pristine machine $WSL may have pointed at the inbox
+    # stub (C:\Windows\System32\wsl.exe). After wsl-setup installs the real WSL2
+    # package, the full binary lands at C:\Program Files\WSL\wsl.exe. Only the real
+    # binary can perform --import, so require it before proceeding.
     if (Test-Path "C:\Program Files\WSL\wsl.exe") {
         $WSL = "C:\Program Files\WSL\wsl.exe"
-    } elseif (-not $WSL) {
-        $WSL = "wsl.exe"
+    } else {
+        # Real WSL2 still absent - a reboot is needed to activate VirtualMachinePlatform.
+        # Register the installer to resume automatically after the user logs back in,
+        # set status so the tray shows "restart to continue", and stop cleanly here
+        # (do NOT fall through to --import with the inbox stub - it will hang).
+        Write-Host "WSL2 needs a reboot to finish installing. The install will resume after restart." -ForegroundColor Yellow
+        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
+        $resume = "powershell -ExecutionPolicy Bypass -File `"$scriptDir\install.ps1`" -Apps `"$Apps`" -LaunchDir `"$LaunchDir`""
+        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce" /v ikuku-resume /t REG_SZ /d $resume /f 2>$null | Out-Null
+        return
     }
     Write-Host "  Using WSL binary: $WSL"
 
@@ -84,7 +107,7 @@ if ($wslTar) {
     & $WSL --import $distroName $installPath $wslTar.FullName
     if ($LASTEXITCODE -ne 0) {
         Write-Host "WSL import failed. A reboot may be required (VirtualMachinePlatform feature)." -ForegroundColor Yellow
-        Write-Host "After reboot, run this installer again — it will resume." -ForegroundColor Yellow
+        Write-Host "After reboot, run this installer again - it will resume." -ForegroundColor Yellow
         Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
         # Enable features that need reboot
         dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>$null | Out-Null
@@ -107,8 +130,12 @@ if ($wslTar) {
     }
     netsh advfirewall firewall add rule name=ikuku dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
 
-    # Copy ikuku.conf to working directory
+    # Copy ikuku.conf to working directory (prefer install dir, fall back to launch dir)
     $confSource = Join-Path $scriptDir "ikuku.conf"
+    if (-not (Test-Path $confSource) -and $LaunchDir) {
+        $altConf = Join-Path $LaunchDir "ikuku.conf"
+        if (Test-Path $altConf) { $confSource = $altConf }
+    }
     if (Test-Path $confSource) { Copy-Item $confSource "C:\ikuku\ikuku.conf" -Force }
 
     # Kiro CLI activation check
@@ -127,7 +154,7 @@ if ($wslTar) {
     Write-Host "  Login: Administrator / admin"
     Write-Host ""
 
-    # Done — skip entire reseller build flow
+    # Done - skip entire reseller build flow
     return
 }
 
@@ -171,9 +198,9 @@ if ($errors.Count -gt 0) {
     exit 1
 }
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 # RESELLER MODE: Build from scratch (existing behavior)
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 # Step 1: WSL2 + Ubuntu + Podman
 Write-Host "Setting up WSL2 + Podman..."
@@ -190,7 +217,7 @@ if ($hasBundle) {
     & $WSL -u root -- bash -c "ln -sf '$wslBundle' /tmp/ikuku-bundle; podman load -i /tmp/ikuku-bundle/img-mariadb.tar; podman load -i /tmp/ikuku-bundle/img-redis.tar; cat /tmp/ikuku-bundle/img-bench.tar.part* | podman load; podman tag ikuku-bench:fresh docker.io/frappe/bench:latest"
 }
 
-# Step 2a: Restore volume dumps if available (full variant — skip source build)
+# Step 2a: Restore volume dumps if available (full variant - skip source build)
 if ($hasBundle) {
     $hasDumps = (Test-Path "$bundleDir\bench-dump.tar.zst") -or (Test-Path "$bundleDir\bench-dump.tar.gz")
     if ($hasDumps) {
