@@ -1,7 +1,18 @@
 *.exe
 *.tar
+*.tar.zst
+*.tar.gz
+*.vhdx
 *.msi
 *.appx
 bundle/
 aws/
 __pycache__
+
+# Layer build artifacts (tarballs are heavy + per-prospect; the manifest layers.json IS tracked)
+layers/*.tar
+layers/*.tar.zst
+layers/*.vhdx
+# but keep the manifest and any example
+!layers/layers.json
+!layers/*.example.json

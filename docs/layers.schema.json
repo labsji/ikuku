@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ikuku/docs/layers.schema.json",
+  "title": "ikuku layered-delivery manifest",
+  "description": "Describes the ordered stack of layers that assemble a prospect-specific ERPNext distro. See docs/LAYERS.md.",
+  "type": "object",
+  "required": ["schemaVersion", "kit", "distro", "layers"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kit": {
+      "type": "string",
+      "description": "Kit identifier, e.g. 'al-souk-travel'.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "distro": {
+      "type": "string",
+      "description": "WSL distro name the base imports as. Almost always 'ikuku'.",
+      "default": "ikuku"
+    },
+    "createdUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Build timestamp (ISO 8601 UTC)."
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/layer" }
+    }
+  },
+  "definitions": {
+    "layer": {
+      "type": "object",
+      "required": ["id", "order", "role", "artifact", "sha256", "cache", "applyMode"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Unique layer id within the manifest."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Ascending apply order. Higher layers may overwrite lower ones."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["base", "app", "vertical", "prospect"],
+          "description": "Layer role; drives caching policy and reseller swappability."
+        },
+        "artifact": {
+          "type": "string",
+          "description": "Tarball filename relative to the kit / cache root (e.g. *.tar, *.tar.zst, *.vhdx)."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Content digest of the artifact. Used for cache hits and integrity."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Artifact size in bytes (informational)."
+        },
+        "cache": {
+          "type": "string",
+          "enum": ["machine", "industry", "none"],
+          "description": "machine: cache under C:\\ikuku\\cache, reuse across all kits. industry: reuse across prospects of same vertical. none: never cached, always ships."
+        },
+        "applyMode": {
+          "type": "string",
+          "enum": ["import", "overlay"],
+          "description": "import: this layer IS the rootfs (wsl --import; --vhd for .vhdx); exactly one layer, must be order 0. overlay: tar extracted over the running distro root by the in-guest composer."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable summary of the layer's contents."
+        }
+      }
+    }
+  }
+}

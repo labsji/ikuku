@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kit": "al-souk-travel",
+  "distro": "ikuku",
+  "createdUtc": "2026-08-17T00:00:00Z",
+  "layers": [
+    {
+      "id": "base",
+      "order": 0,
+      "role": "base",
+      "artifact": "base-ubuntu-podman.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "cache": "machine",
+      "applyMode": "import",
+      "description": "Ubuntu rootfs + podman + frappe user + preloaded container images (mariadb, redis, bench)"
+    },
+    {
+      "id": "app-erpnext-v16",
+      "order": 1,
+      "role": "app",
+      "artifact": "app-erpnext-v16.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "cache": "machine",
+      "applyMode": "overlay",
+      "description": "ERPNext v16 bench + bind + kiro-cli binaries + next-sale training content + mariadb site volume"
+    },
+    {
+      "id": "vertical-travel",
+      "order": 2,
+      "role": "vertical",
+      "artifact": "vertical-travel.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "cache": "industry",
+      "applyMode": "overlay",
+      "description": "Travel/TMC vertical: seed.repl records (agents, package BOM presets, GCC tax templates)"
+    },
+    {
+      "id": "prospect-al-souk",
+      "order": 3,
+      "role": "prospect",
+      "artifact": "prospect-al-souk.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0,
+      "cache": "none",
+      "applyMode": "overlay",
+      "description": "Al Souk Travel & Tourism LLC: ikuku.conf (name, OTP codes, endpoint) + niche-context.md"
+    }
+  ]
+}

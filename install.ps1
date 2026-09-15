@@ -61,6 +61,137 @@ if ($LaunchDir -and (Test-Path $LaunchDir)) { $tarSearchDirs += $LaunchDir }
 $tarSearchDirs += $scriptDir
 $tarSearchDirs += (Split-Path $scriptDir)
 $tarSearchDirs = $tarSearchDirs | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+# =======================================================================
+# LAYERED MODE (preferred): a layers.json manifest describes an ordered
+# stack of tar layers (base + app + vertical + prospect). See docs/LAYERS.md.
+# The heavy base/app layers are cached under C:\ikuku\cache by content digest
+# so repeat prospects only ship the thin vertical/prospect layers.
+# This branch runs BEFORE the legacy single-artifact path and returns on success.
+# =======================================================================
+$manifestFile = Get-ChildItem -Path $tarSearchDirs -Filter "layers.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $manifestFile) { $manifestFile = Get-ChildItem -Path "$env:USERPROFILE\Downloads" -Filter "layers.json" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+if ($manifestFile) {
+    Write-Host ""
+    Write-Host "=== Layered Mode: assembling preconfigured ERPNext from layers ===" -ForegroundColor Green
+    $manifest = Get-Content $manifestFile.FullName -Raw | ConvertFrom-Json
+    $kitDir = Split-Path $manifestFile.FullName
+    $cacheDir = "C:\ikuku\cache"
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
+    Write-Host "  Kit: $($manifest.kit)  ($(@($manifest.layers).Count) layers)"
+
+    # Ensure WSL2 (kernel only). Same pending-reboot/RunOnce resume logic as the
+    # legacy path: on a pristine machine this may require a reboot before wsl --import works.
+    & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro
+    if (Test-Path "C:\Program Files\WSL\wsl.exe") {
+        $WSL = "C:\Program Files\WSL\wsl.exe"
+    } else {
+        Write-Host "WSL2 needs a reboot to finish installing. The install will resume after restart." -ForegroundColor Yellow
+        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
+        $resume = "powershell -ExecutionPolicy Bypass -File `"$scriptDir\install.ps1`" -Apps `"$Apps`" -LaunchDir `"$LaunchDir`""
+        $runOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+        if (-not (Test-Path $runOnceKey)) { New-Item -Path $runOnceKey -Force | Out-Null }
+        New-ItemProperty -Path $runOnceKey -Name "ikuku-resume" -Value $resume -PropertyType String -Force | Out-Null
+        return
+    }
+    Write-Host "  Using WSL binary: $WSL"
+
+    # Prevent WSL auto-shutdown
+    @("[wsl2]", "vmIdleTimeout=-1", "memory=12GB", "swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
+
+    # --- Resolve each layer's artifact, using the content-addressed cache ---
+    # cache != none  -> keep under C:\ikuku\cache\<sha256><ext>, reuse if present (skip ship).
+    # cache == none  -> always taken from the kit dir (per-prospect, never cached).
+    $orderedLayers = @($manifest.layers) | Sort-Object order
+    function Resolve-LayerPath($layer) {
+        $srcInKit = Join-Path $kitDir $layer.artifact
+        if ($layer.cache -eq "none") { return $srcInKit }
+        $ext = [System.IO.Path]::GetExtension($layer.artifact)
+        # preserve compound extensions like .tar.zst / .tar.gz
+        if ($layer.artifact -match "\.tar\.(zst|gz)$") { $ext = ".tar." + $Matches[1] }
+        $cached = Join-Path $cacheDir ($layer.sha256 + $ext)
+        if (Test-Path $cached) {
+            $shaShort = if ($layer.sha256 -and $layer.sha256.Length -ge 12) { $layer.sha256.Substring(0,12) } else { $layer.sha256 }
+            Write-Host "  cache HIT  $($layer.role): $shaShort… (reusing, not re-shipped)" -ForegroundColor Cyan
+        } elseif (Test-Path $srcInKit) {
+            Write-Host "  cache MISS $($layer.role): caching $($layer.artifact)"
+            Copy-Item $srcInKit $cached -Force
+        } else {
+            throw "Layer artifact not found in kit and not cached: $($layer.artifact) (sha $($layer.sha256))"
+        }
+        return $cached
+    }
+
+    # --- Import the base layer (applyMode=import; --vhd for .vhdx) ---
+    $baseLayer = $orderedLayers | Where-Object { $_.applyMode -eq "import" } | Select-Object -First 1
+    if (-not $baseLayer) { throw "Manifest has no base layer (applyMode=import)." }
+    $basePath = Resolve-LayerPath $baseLayer
+    $distroName = if ($manifest.distro) { $manifest.distro } else { "ikuku" }
+    $installPath = "C:\ikuku"
+    $existing = & $WSL -l -q 2>&1 | Out-String
+    if ($existing -match $distroName) {
+        Write-Host "  Replacing existing '$distroName' distro..."
+        & $WSL --unregister $distroName 2>&1 | Out-Null
+    }
+    Write-Host "  Importing base layer as '$distroName'..."
+    if ($basePath -match "\.vhdx$") {
+        & $WSL --import $distroName $installPath $basePath --vhd
+    } else {
+        & $WSL --import $distroName $installPath $basePath
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Base import failed. A reboot may be required (VirtualMachinePlatform)." -ForegroundColor Yellow
+        Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
+        dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>$null | Out-Null
+        return
+    }
+
+    # --- Stage the manifest + overlay artifacts into the distro at /opt/ikuku/layers ---
+    Write-Host "  Staging overlay layers into the distro..."
+    & $WSL -d $distroName -u root -- bash -c "mkdir -p /opt/ikuku/layers"
+    $manifestWsl = (& $WSL -d $distroName -u root -- wslpath -a ($manifestFile.FullName -replace '\\','/')).Trim()
+    & $WSL -d $distroName -u root -- bash -c "cp '$manifestWsl' /opt/ikuku/layers/layers.json"
+    foreach ($layer in $orderedLayers) {
+        if ($layer.applyMode -eq "import") { continue }
+        $lp = Resolve-LayerPath $layer
+        $lpWsl = (& $WSL -d $distroName -u root -- wslpath -a ($lp -replace '\\','/')).Trim()
+        & $WSL -d $distroName -u root -- bash -c "cp '$lpWsl' '/opt/ikuku/layers/$($layer.artifact)'"
+    }
+
+    # Ship apply-layers.sh alongside (base may already contain it, but ensure the latest)
+    $applyWsl = (& $WSL -d $distroName -u root -- wslpath -a ((Join-Path $scriptDir 'apply-layers.sh') -replace '\\','/')).Trim()
+    & $WSL -d $distroName -u root -- bash -c "if [ -f '$applyWsl' ]; then cp '$applyWsl' /opt/ikuku/apply-layers.sh; fi; sed -i 's/\r//' /opt/ikuku/apply-layers.sh 2>/dev/null; chmod +x /opt/ikuku/apply-layers.sh"
+
+    # --- Compose: apply overlays in order, then boot ---
+    Write-Host "  Composing layers (this assembles ERPNext + Kiro)..." -ForegroundColor Green
+    Set-Content -Path "C:\ikuku\status.txt" -Value "starting"
+    & $WSL -d $distroName -u root -- bash /opt/ikuku/apply-layers.sh
+
+    # --- Post-compose: same as the legacy prospect path ---
+    $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null)
+    if ($wslIp) { $wslIp = $wslIp.Trim().Split(' ')[0] }
+    if ($wslIp) {
+        netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null
+    }
+    netsh advfirewall firewall add rule name=ikuku dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
+
+    # ikuku.conf now lives inside the distro (dropped by the prospect layer); mirror to C:\ikuku for the tray
+    & $WSL -d $distroName -u root -- bash -c "if [ -f /opt/ikuku/ikuku.conf ]; then cp /opt/ikuku/ikuku.conf /mnt/c/ikuku/ikuku.conf 2>/dev/null; fi"
+
+    $bashKiro = "test -f /opt/ikuku/shared/kiro-cli && /opt/ikuku/shared/kiro-cli --version 2>/dev/null && echo KIRO_OK"
+    $kiroActive = & $WSL -d $distroName -u root -- bash -c $bashKiro 2>$null
+    if ($kiroActive -match "KIRO_OK") { Write-Host "  Kiro CLI: available (Master of Ceremonies ready)" -ForegroundColor Cyan }
+
+    Set-Content -Path "C:\ikuku\status.txt" -Value "active"
+    Write-Host ""
+    Write-Host "=== ERPNext is starting (layered) ===" -ForegroundColor Green
+    Write-Host "  URL:   http://localhost:8000"
+    Write-Host "  Login: Administrator / admin"
+    Write-Host ""
+    return
+}
+
 # Accept either a .vhdx (preferred - imported with 'wsl --import --vhd', avoids the
 # WSL tar-export/import hang seen on large distros) or a legacy *wsl*.tar. Prefer vhdx.
 $wslTar = Get-ChildItem -Path $tarSearchDirs -Filter "*.vhdx" -ErrorAction SilentlyContinue | Select-Object -First 1
