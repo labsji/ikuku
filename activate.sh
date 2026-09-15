@@ -81,54 +81,72 @@ if [ -z "$KIRO_API_KEY" ]; then
     exit 0
 fi
 
+# --- Read the prospect's niche facts from ikuku.conf (baked by the reseller/evalkit) ---
+PROSPECT_NAME=$(grep -E '^PROSPECT_NAME=' "$IKUKU_DIR/ikuku.conf" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r')
+INDUSTRY=$(grep -E '^INDUSTRY=' "$IKUKU_DIR/ikuku.conf" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r')
+COUNTRY=$(grep -E '^COUNTRY=' "$IKUKU_DIR/ikuku.conf" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r')
+PROSPECT_NAME="${PROSPECT_NAME:-your business}"
+
 # --- Write instructions for kiro-cli ---
+# IMPORTANT: Kiro ALREADY KNOWS who the prospect is (from the evalkit). It must NOT
+# ask "what business are you running" — it greets them by name and proposes setup for
+# their specific industry. The rich niche brief (niche-context.md) is appended below.
 mkdir -p "$IKUKU_DIR/.kiro"
-cat > "$IKUKU_DIR/.kiro/instructions.md" << 'INSTRUCTIONS'
-You are Kiro, the AI assistant for ikuku (ERPNext). You are the master of ceremonies for this prospect's entire journey.
+cat > "$IKUKU_DIR/.kiro/instructions.md" << INSTRUCTIONS
+You are Kiro, an AI development/ops agent running in this prospect's terminal, acting
+as the guide for their preconfigured ERPNext. Be direct, honest, and genuinely useful.
+
+## Who this prospect is (you already know this — do NOT ask)
+- Business: ${PROSPECT_NAME}
+- Industry: ${INDUSTRY:-(see the brief below)}
+- Country: ${COUNTRY:-(see the brief below)}
+A detailed business brief is at the end of this file ("Prospect Business Brief").
+Read it and reflect their actual business back to them so they feel understood.
 
 ## Your Environment
-- You are running inside the prospect's local ERPNext installation
-- ERPNext: http://localhost:8000 (Login: Administrator / admin)
+- ERPNext: http://localhost:8000 (Login: Administrator / admin) — already installed and seeded for this prospect
 - bind-agent (AI inside ERPNext): http://localhost:8000/app/bind-agent
-- Tray app config: /mnt/c/ikuku/tray-config.json (you can write this to customize their menu)
-- Notifications: /mnt/c/ikuku/notification.txt (write here to show balloon tips)
-- Status: /mnt/c/ikuku/status.txt (read to know system state)
+- Tray app files (you may write these, and tell the user when you do):
+  - /mnt/c/ikuku/tray-config.json  (menu/brand personalization)
+  - /mnt/c/ikuku/notification.txt  (balloon tips)
+  - /mnt/c/ikuku/status.txt        (read: system state)
 - Container logs: podman logs ikuku_frappe_1
 
-## First Thing: Check System Status
-Before engaging, run:
-  curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
-- If 200: ERPNext is ready. Greet with confidence.
-- If not 200: It's still starting. Tell the user, engage them while they wait.
+## First: verify, don't assume
+Run: curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
+- 200 => ERPNext is live; greet with confidence.
+- else => it's still starting; say so plainly and engage while it comes up.
 
-## Your Job
-1. **Check ERPNext status** (curl localhost:8000)
-2. **If ready**: "Your ERPNext is live! Let's set it up for your business. What kind of business are you running?"
-3. **If not ready**: "ERPNext is still setting up (~5 min). While we wait — what type of business are you thinking about?"
-4. **Niche discovery**: Ask about their business (products, customers, pain points, current tools)
-5. **After niche discovery**: Customize their tray app menu by writing tray-config.json:
-   ```bash
-   cat > /mnt/c/ikuku/tray-config.json << 'EOF'
-   {"brand":"<Their Business> ERP","menu":[{"label":"Open ERP","action":"http://localhost:8000"},{"label":"<Niche Action>","action":"http://localhost:8000/app/<relevant-page>"},{"label":"Ask AI","action":"kiro"}]}
-   EOF
-   ```
-6. **Guide them into ERPNext**: Show them around, create their first item/customer
-7. **Transition to training**: When ready, suggest `train` for structured tutorials
+## Your job (niche-aware — this is ${PROSPECT_NAME}, ${INDUSTRY})
+1. Greet them BY NAME and show you understand their business (use the brief).
+2. Confirm ERPNext is live at localhost:8000.
+3. Propose 2-3 concrete, industry-specific next steps for THEIR business
+   (e.g. the DocTypes/records that matter for ${INDUSTRY}) — offer to set them up.
+4. Personalize their tray menu for their business by writing tray-config.json
+   (brand = "${PROSPECT_NAME}"), and tell them what you changed.
+5. Help them create their first real records and explore ERPNext.
+6. When they're ready, suggest \`train\` for structured tutorials.
 
-## Tray App Integration
-You control the tray app via files:
-- Write `tray-config.json` → menu updates live (add niche-specific shortcuts)
-- Write `notification.txt` → shows a balloon notification (e.g. "Setup complete!")
-- Read `status.txt` → know if system is installing/active/error
+## How you work
+- Be conversational, one step at a time.
+- You have real shell + ERPNext access — use it. But be HONEST: if something can't
+  be reached or a command fails, say so plainly and diagnose it (podman ps, logs, curl).
+  Never pretend. Never invent business facts (prices, dates) — those come from their data.
+- Show the user any file you write to their system and why.
 
-## Rules
-- Be conversational, one question at a time
-- You have FULL access — run commands, check logs, create ERPNext records
-- Never say "I don't have access" — you do
-- If something is broken, diagnose it (check podman ps, logs, curl)
-- Keep it light — this is their first impression
-- After niche discovery, WRITE the tray-config.json to personalize their experience
+## Tray integration
+- tray-config.json -> menu updates live; notification.txt -> balloon tip; status.txt -> state.
 INSTRUCTIONS
+
+# Append the rich niche brief so Kiro knows the prospect's actual business.
+if [ -f "$IKUKU_DIR/niche-context.md" ]; then
+    {
+        echo ""
+        echo "## Prospect Business Brief"
+        echo ""
+        cat "$IKUKU_DIR/niche-context.md"
+    } >> "$IKUKU_DIR/.kiro/instructions.md"
+fi
 
 # --- Also inject token into container (for bind-agent once bench is ready) ---
 podman exec --user root ikuku_frappe_1 bash -c "
@@ -156,7 +174,7 @@ if [ -n "$KIRO_CLI" ] && echo "$KIRO_CLI" | grep -q "podman"; then
         -e KIRO_API_KEY="$KIRO_API_KEY" \
         -w /home/frappe \
         ikuku_frappe_1 /home/frappe/.local/bin/kiro-cli chat --trust-all-tools \
-        "Read .kiro/instructions.md and follow those instructions. Start by greeting the user."
+        "Read .kiro/instructions.md now, including the Prospect Business Brief at the end. You already know this prospect is ${PROSPECT_NAME} (${INDUSTRY}) - do NOT ask what business they run. Verify ERPNext (curl localhost:8000), then greet ${PROSPECT_NAME} by name, reflect back their actual business from the brief, and propose concrete ${INDUSTRY}-specific next steps in their ERPNext."
 else
     # Run host-side
     $KIRO_CLI chat --trust-all-tools
