@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "kit": "al-souk-travel",
+  "strategy": "B",
+  "distro": "Ubuntu",
+  "createdUtc": "2026-08-17T00:00:00Z",
+  "layers": [
+    {
+      "id": "base-ubuntu",
+      "order": 0,
+      "role": "base",
+      "applyMode": "wsl-install",
+      "wslDistro": "Ubuntu",
+      "description": "Standard Ubuntu pulled by `wsl --install -d Ubuntu` + apt podman. Not shipped."
+    },
+    {
+      "id": "app-images",
+      "order": 1,
+      "role": "app",
+      "applyMode": "podman-load",
+      "artifact": "app-images.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 1878613426,
+      "cache": "machine",
+      "description": "podman save of frappe/bench:latest + mariadb:10.8 + redis:alpine. Reused by every prospect."
+    },
+    {
+      "id": "kiro",
+      "order": 2,
+      "role": "kiro",
+      "applyMode": "overlay",
+      "artifact": "kiro.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 430000000,
+      "cache": "machine",
+      "description": "Single copy of kiro-cli + kiro-cli-chat + bind.tar.gz -> /opt/ikuku/shared. Reused by every prospect."
+    },
+    {
+      "id": "vertical-travel",
+      "order": 3,
+      "role": "vertical",
+      "applyMode": "volume-import",
+      "artifact": "vol-frappe-bench.tar.zst",
+      "volumeName": "ikuku_frappe-bench",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 363811396,
+      "cache": "industry",
+      "description": "frappe-bench volume (apps/env/sites) for the travel vertical."
+    },
+    {
+      "id": "prospect-al-souk-db",
+      "order": 4,
+      "role": "prospect",
+      "applyMode": "volume-import",
+      "artifact": "vol-mariadb-data.tar.zst",
+      "volumeName": "ikuku_mariadb-data",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 13501649,
+      "cache": "none",
+      "description": "Seeded ERPNext DB for Al Souk Travel."
+    },
+    {
+      "id": "prospect-al-souk",
+      "order": 5,
+      "role": "prospect",
+      "applyMode": "overlay",
+      "artifact": "prospect-al-souk.tar.zst",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 4096,
+      "cache": "none",
+      "description": "Al Souk ikuku.conf (name/OTP/endpoint) + niche-context.md + seed.repl -> /opt/ikuku"
+    }
+  ]
+}

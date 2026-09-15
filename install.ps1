@@ -79,8 +79,102 @@ if ($manifestFile) {
     $cacheDir = "C:\ikuku\cache"
     New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
     Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
-    Write-Host "  Kit: $($manifest.kit)  ($(@($manifest.layers).Count) layers)"
+    $strategy = if ($manifest.strategy) { $manifest.strategy } else { "A" }
+    Write-Host "  Kit: $($manifest.kit)  (strategy $strategy, $(@($manifest.layers).Count) layers)"
 
+    # =========================================================================
+    # STRATEGY B: standard Ubuntu base (wsl --install) + podman image/volume layers.
+    # No fat vhdx. The base is Microsoft's fast, resumable Ubuntu install; the app
+    # (container images) + kiro are cached by digest and reused across prospects.
+    # =========================================================================
+    if ($strategy -eq "B") {
+        $baseLayer  = @($manifest.layers) | Where-Object { $_.applyMode -eq "wsl-install" } | Select-Object -First 1
+        $distroName = if ($baseLayer -and $baseLayer.wslDistro) { $baseLayer.wslDistro } elseif ($manifest.distro) { $manifest.distro } else { "Ubuntu" }
+        $kitDirB  = Split-Path $manifestFile.FullName
+        $cacheDir = "C:\ikuku\cache"
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+
+        # 1) Ensure WSL2 + the standard Ubuntu distro (reboot/resume if pristine).
+        & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
+        if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
+        elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
+        $distros = & $WSL -l -q 2>&1 | Out-String
+        if ($distros -notmatch [regex]::Escape($distroName)) {
+            Write-Host "WSL2/Ubuntu needs a reboot to finish installing. Resuming after restart." -ForegroundColor Yellow
+            Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
+            $resume = "powershell -ExecutionPolicy Bypass -File `"$scriptDir\install.ps1`" -Apps `"$Apps`" -LaunchDir `"$LaunchDir`""
+            $runOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+            if (-not (Test-Path $runOnceKey)) { New-Item -Path $runOnceKey -Force | Out-Null }
+            New-ItemProperty -Path $runOnceKey -Name "ikuku-resume" -Value $resume -PropertyType String -Force | Out-Null
+            return
+        }
+        @("[wsl2]", "vmIdleTimeout=-1", "memory=12GB", "swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
+        Write-Host "  Base distro: $distroName (via $WSL)"
+
+        # 2) Ensure podman + podman-compose in the distro (offline if apt cache present).
+        Write-Host "  Ensuring podman in the base distro..."
+        & $WSL -d $distroName -u root -- bash -c "command -v podman >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq podman podman-compose python3 zstd curl >/dev/null 2>&1); echo podman=`$(command -v podman)"
+
+        # 3) Content-addressed cache for machine-scope layers (app-images, kiro).
+        function Resolve-LayerPathB($layer) {
+            $srcInKit = Join-Path $kitDirB $layer.artifact
+            if ($layer.cache -eq "none" -or -not $layer.sha256) { return $srcInKit }
+            $ext = [System.IO.Path]::GetExtension($layer.artifact)
+            if ($layer.artifact -match "\.tar\.(zst|gz)$") { $ext = ".tar." + $Matches[1] }
+            $cached = Join-Path $cacheDir ($layer.sha256 + $ext)
+            if (Test-Path $cached) {
+                $shaShort = if ($layer.sha256.Length -ge 12) { $layer.sha256.Substring(0,12) } else { $layer.sha256 }
+                Write-Host "  cache HIT  $($layer.role): $shaShort... (reusing, not re-shipped)" -ForegroundColor Cyan
+            } elseif (Test-Path $srcInKit) {
+                Write-Host "  cache MISS $($layer.role): caching $($layer.artifact)"
+                Copy-Item $srcInKit $cached -Force
+            } else { throw "Layer artifact not found in kit and not cached: $($layer.artifact)" }
+            return $cached
+        }
+
+        # 4) Stage manifest + all artifacts into the distro /opt/ikuku/layers.
+        Write-Host "  Staging layer artifacts into the distro..." -ForegroundColor Green
+        Set-Content -Path "C:\ikuku\status.txt" -Value "starting"
+        & $WSL -d $distroName -u root -- bash -c "mkdir -p /opt/ikuku/layers"
+        $manifestWsl = (& $WSL -d $distroName -u root -- wslpath -a ($manifestFile.FullName -replace '\\','/')).Trim()
+        & $WSL -d $distroName -u root -- bash -c "cp '$manifestWsl' /opt/ikuku/layers/layers.json"
+        foreach ($layer in (@($manifest.layers) | Sort-Object order)) {
+            if ($layer.applyMode -eq "wsl-install") { continue }
+            $lp = Resolve-LayerPathB $layer
+            $lpWsl = (& $WSL -d $distroName -u root -- wslpath -a ($lp -replace '\\','/')).Trim()
+            & $WSL -d $distroName -u root -- bash -c "cp '$lpWsl' '/opt/ikuku/layers/$($layer.artifact)'"
+        }
+        # base /opt/ikuku scripts (compose/init/boot/activate) + apply-layers.sh
+        foreach ($s in @("docker-compose.yml","init.sh","boot.sh","activate.sh","autostart.sh","start-local.sh","apply-layers.sh")) {
+            $sp = Join-Path $scriptDir $s
+            if (Test-Path $sp) {
+                $spWsl = (& $WSL -d $distroName -u root -- wslpath -a ($sp -replace '\\','/')).Trim()
+                & $WSL -d $distroName -u root -- bash -c "cp '$spWsl' /opt/ikuku/$s 2>/dev/null; sed -i 's/\r//' /opt/ikuku/$s 2>/dev/null; chmod +x /opt/ikuku/$s 2>/dev/null"
+            }
+        }
+
+        # 5) Compose the layers (podman load + volume import + overlays + up).
+        Write-Host "  Composing layers (podman load images, import volumes, start ERPNext)..." -ForegroundColor Green
+        & $WSL -d $distroName -u root -- bash /opt/ikuku/apply-layers.sh
+
+        # 6) Port forwarding + firewall (ERPNext on 8000).
+        $wslIp = (& $WSL -d $distroName -u root -- hostname -I 2>$null)
+        if ($wslIp) { $wslIp = $wslIp.Trim().Split(' ')[0] }
+        if ($wslIp) { netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp 2>&1 | Out-Null }
+        netsh advfirewall firewall add rule name=ikuku dir=in action=allow protocol=TCP localport=8000 2>&1 | Out-Null
+        & $WSL -d $distroName -u root -- bash -c "if [ -f /opt/ikuku/ikuku.conf ]; then cp /opt/ikuku/ikuku.conf /mnt/c/ikuku/ikuku.conf 2>/dev/null; fi"
+
+        Set-Content -Path "C:\ikuku\status.txt" -Value "active"
+        Write-Host ""
+        Write-Host "=== ERPNext is starting (Strategy B, layered) ===" -ForegroundColor Green
+        Write-Host "  URL:   http://localhost:8000"
+        Write-Host "  Login: Administrator / admin"
+        return
+    }
+
+    # =========================================================================
+    # STRATEGY A: fat vhdx base imported + file overlays (fallback).
+    # =========================================================================
     # Ensure WSL2 (kernel only). Same pending-reboot/RunOnce resume logic as the
     # legacy path: on a pristine machine this may require a reboot before wsl --import works.
     & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4 -SkipDistro

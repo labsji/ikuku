@@ -161,3 +161,72 @@ monolithic kits working during the transition.
 
 Usage will refine the exact layer boundaries over time; the manifest's `order` +
 `role` + content-addressing are the stable contract.
+
+
+---
+
+# Strategy B (recommended): standard-Ubuntu base + podman app layers
+
+Strategy A (above) ships the whole distro as one ~12 GB `.vhdx`. Ground-truth
+investigation (`docs/GROUND-TRUTH-layers.md`) showed ikuku is *already* thin-Ubuntu +
+container-payload, and a measured build (`docs/STRATEGY-B-results.md`) confirmed B is
+~4–5× lighter for the first prospect, ~30× lighter for repeats, and more failure-
+resilient. **B is the recommended primary path; A stays as the offline fallback.**
+
+## B layers
+
+manifest `schemaVersion: 2`, `strategy: "B"`. Layers, in apply order:
+
+| # | id | role | applyMode | artifact | cache | reuse |
+|---|----|------|-----------|----------|-------|-------|
+| 0 | `base-ubuntu` | base | `wsl-install` | — (pulled by `wsl --install -d Ubuntu`) | — | every machine |
+| 1 | `app-images` | app | `podman-load` | `app-images.tar.zst` (frappe/bench + mariadb + redis) | machine | **every prospect** |
+| 2 | `kiro` | kiro | `overlay` | `kiro.tar.zst` (single kiro-cli + kiro-cli-chat + bind) → `/opt/ikuku/shared` | machine | **every prospect** |
+| 3 | `vertical-<x>` | vertical | `volume-import` | `vol-frappe-bench.tar.zst` → volume `ikuku_frappe-bench` | industry | per industry |
+| 4 | `prospect-<x>-db` | prospect | `volume-import` | `vol-mariadb-data.tar.zst` → volume `ikuku_mariadb-data` | none | per prospect |
+| 5 | `prospect-<x>` | prospect | `overlay` | `prospect-<x>.tar.zst` (`ikuku.conf` + `niche-context.md` + `seed.repl`) → `/opt/ikuku` | none | per prospect |
+
+The **base is not shipped** — it is Microsoft's fast, resumable `wsl --install -d Ubuntu`.
+The **app-images** (5.63 GB frappe/bench + mariadb + redis, all stock) and **kiro** are
+cached by content digest under `C:\ikuku\cache` and reused by *every* prospect. Only the
+volumes (~360 MB compressed) and the tiny prospect overlay ship per prospect.
+
+## B applyModes
+
+- **`wsl-install`** — the base. Installer runs `wsl --install -d <wslDistro>` (default
+  `Ubuntu`), then `apt-get install podman podman-compose`. No artifact.
+- **`podman-load`** — artifact is a `podman save` multi-image tar; composer runs
+  `podman load -i <artifact>` into the **default** store `/var/lib/containers/storage`.
+- **`volume-import`** — artifact is a `podman volume export` tar; composer runs
+  `podman volume create <volumeName>` + `podman volume import <volumeName> <artifact>`.
+- **`overlay`** — files extracted over the distro root (kiro binaries → `/opt/ikuku/shared`;
+  prospect config → `/opt/ikuku`).
+
+## Why not relocate the store (graphroot)?
+
+Measured: podman's libpod bolt DB hardcodes the original graphroot; `podman --root <other>`
+fails with *"database configuration mismatch"*. So B uses the **default** store path,
+which is exactly where a fresh `wsl --install` Ubuntu's podman looks — no relocation
+needed. Also: always ship via `podman save`/`volume export` (portable, lands in a clean
+store), **never** a raw copy of a live store (it carries un-removable phantom containers).
+
+## B apply flow (first boot)
+
+```
+install.ps1 (B branch)
+  ├─ wsl --install -d Ubuntu        (base; may reboot+resume — reused untouched)
+  ├─ apt-get install podman podman-compose
+  ├─ cache machine-scope layers (app-images, kiro) under C:\ikuku\cache by sha256
+  ├─ copy layer artifacts + manifest into the distro /opt/ikuku/layers
+  └─ wsl -d Ubuntu -u root -- bash /opt/ikuku/apply-layers.sh
+        ├─ podman load app-images.tar.zst            (cache HIT skips re-ship)
+        ├─ extract kiro.tar.zst → /opt/ikuku/shared  (one copy)
+        ├─ volume-import vol-frappe-bench, vol-mariadb-data
+        ├─ extract prospect overlay → /opt/ikuku (ikuku.conf, niche, seed.repl)
+        └─ podman-compose up → init.sh (bench start) → activate.sh (niche Kiro)
+```
+
+Idempotent (sha markers) and offline-safe (no network needed to apply; OTP activation
+reaches the endpoint if online). Repeat prospects hit the cache for app-images + kiro
+and only ship the thin vertical/prospect layers — this is the reuse the two-evalkit
+test (Al Souk + KapadiWala) exercises.

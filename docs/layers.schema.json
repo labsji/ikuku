@@ -2,20 +2,25 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://ikuku/docs/layers.schema.json",
   "title": "ikuku layered-delivery manifest",
-  "description": "Describes the ordered stack of layers that assemble a prospect-specific ERPNext distro. See docs/LAYERS.md.",
+  "description": "Describes the ordered stack of layers that assemble a prospect-specific ERPNext distro. Supports Strategy A (fat vhdx base + file overlays) and Strategy B (standard-Ubuntu base + podman image/volume layers). See docs/LAYERS.md and docs/STRATEGY-B-results.md.",
   "type": "object",
-  "required": ["schemaVersion", "kit", "distro", "layers"],
+  "required": ["schemaVersion", "kit", "layers"],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 1 },
+    "schemaVersion": { "type": "integer", "enum": [1, 2] },
     "kit": {
       "type": "string",
       "description": "Kit identifier, e.g. 'al-souk-travel'.",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
+    "strategy": {
+      "type": "string",
+      "enum": ["A", "B"],
+      "description": "A = fat vhdx base imported + file overlays. B = standard Ubuntu base (wsl --install) + podman image/volume layers. Defaults to A when absent (schemaVersion 1)."
+    },
     "distro": {
       "type": "string",
-      "description": "WSL distro name the base imports as. Almost always 'ikuku'.",
+      "description": "WSL distro name the base imports/installs as. 'ikuku' for A; for B the base is a standard Ubuntu distro (often named 'Ubuntu' or reused).",
       "default": "ikuku"
     },
     "createdUtc": {
@@ -32,7 +37,7 @@
   "definitions": {
     "layer": {
       "type": "object",
-      "required": ["id", "order", "role", "artifact", "sha256", "cache", "applyMode"],
+      "required": ["id", "order", "role", "applyMode"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -43,21 +48,21 @@
         "order": {
           "type": "integer",
           "minimum": 0,
-          "description": "Ascending apply order. Higher layers may overwrite lower ones."
+          "description": "Ascending apply order. Higher layers may overwrite/extend lower ones."
         },
         "role": {
           "type": "string",
-          "enum": ["base", "app", "vertical", "prospect"],
-          "description": "Layer role; drives caching policy and reseller swappability."
+          "enum": ["base", "app", "kiro", "vertical", "prospect"],
+          "description": "Layer role; drives caching policy and reseller swappability. base: the OS. app: ERPNext container images. kiro: the kiro-cli binaries. vertical: industry data (volumes/seed). prospect: name/OTP/niche."
         },
         "artifact": {
           "type": "string",
-          "description": "Tarball filename relative to the kit / cache root (e.g. *.tar, *.tar.zst, *.vhdx)."
+          "description": "Artifact filename relative to the kit / cache root. Omitted when applyMode is 'wsl-install' (the base is pulled by wsl --install, not shipped)."
         },
         "sha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$",
-          "description": "Content digest of the artifact. Used for cache hits and integrity."
+          "description": "Content digest of the artifact. Used for cache hits + integrity. Omitted for 'wsl-install'."
         },
         "size": {
           "type": "integer",
@@ -67,18 +72,36 @@
         "cache": {
           "type": "string",
           "enum": ["machine", "industry", "none"],
-          "description": "machine: cache under C:\\ikuku\\cache, reuse across all kits. industry: reuse across prospects of same vertical. none: never cached, always ships."
+          "description": "machine: cache under C:\\ikuku\\cache, reuse across all kits (base image + kiro). industry: reuse across prospects of same vertical. none: never cached, always ships."
         },
         "applyMode": {
           "type": "string",
-          "enum": ["import", "overlay"],
-          "description": "import: this layer IS the rootfs (wsl --import; --vhd for .vhdx); exactly one layer, must be order 0. overlay: tar extracted over the running distro root by the in-guest composer."
+          "enum": ["import", "wsl-install", "podman-load", "volume-import", "overlay"],
+          "description": "import (A): layer IS the rootfs (wsl --import; --vhd for .vhdx), order 0. wsl-install (B): base pulled by `wsl --install -d <distro>`, no artifact. podman-load (B): artifact is a `podman save` image tar -> `podman load`. volume-import (B): artifact is a `podman volume export` tar -> create+import as a named volume. overlay (A/B): tar extracted over the distro root by the composer."
+        },
+        "volumeName": {
+          "type": "string",
+          "description": "For applyMode 'volume-import': the podman named volume to create+import into (e.g. 'ikuku_frappe-bench')."
+        },
+        "wslDistro": {
+          "type": "string",
+          "description": "For applyMode 'wsl-install': the distro to install (default 'Ubuntu')."
         },
         "description": {
           "type": "string",
           "description": "Human-readable summary of the layer's contents."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "applyMode": { "enum": ["import", "podman-load", "volume-import", "overlay"] } } },
+          "then": { "required": ["artifact", "sha256", "cache"] }
+        },
+        {
+          "if": { "properties": { "applyMode": { "const": "volume-import" } } },
+          "then": { "required": ["volumeName"] }
+        }
+      ]
     }
   }
 }
