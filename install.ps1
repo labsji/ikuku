@@ -94,26 +94,42 @@ if ($manifestFile) {
         $cacheDir = "C:\ikuku\cache"
         New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 
-        # 1) Ensure WSL2 + the standard Ubuntu distro (reboot/resume if pristine).
-        & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
-        if (Test-Path "C:\Program Files\WSL\wsl.exe") { $WSL = "C:\Program Files\WSL\wsl.exe" }
-        elseif (Get-Command wsl.exe -ErrorAction SilentlyContinue) { $WSL = "wsl.exe" }
-        $distros = & $WSL -l -q 2>&1 | Out-String
-        if ($distros -notmatch [regex]::Escape($distroName)) {
-            Write-Host "WSL2/Ubuntu needs a reboot to finish installing. Resuming after restart." -ForegroundColor Yellow
+        # Helper: register RunOnce + set pending_reboot + return-signal (pristine needs a reboot
+        # to activate VirtualMachinePlatform before WSL2 works).
+        function Set-IkukuResume() {
+            Write-Host "WSL2 needs a reboot to finish installing. The install resumes after restart." -ForegroundColor Yellow
             Set-Content -Path "C:\ikuku\status.txt" -Value "pending_reboot"
             $resume = "powershell -ExecutionPolicy Bypass -File `"$scriptDir\install.ps1`" -Apps `"$Apps`" -LaunchDir `"$LaunchDir`""
             $runOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
             if (-not (Test-Path $runOnceKey)) { New-Item -Path $runOnceKey -Force | Out-Null }
             New-ItemProperty -Path $runOnceKey -Name "ikuku-resume" -Value $resume -PropertyType String -Force | Out-Null
-            return
+        }
+
+        # 1) Ensure WSL2 kernel + the standard Ubuntu distro (reboot/resume if pristine).
+        & "$sharedDir\wsl-setup.ps1" -MemoryGB 12 -SwapGB 4
+        # Robust reboot gate: rely on the REAL WSL binary, NOT on parsing `wsl -l -q`
+        # (the inbox stub emits UTF-16 and offers "Ubuntu" even when nothing is installed,
+        # which fooled a naive -match). Absent real binary => reboot required.
+        if (-not (Test-Path "C:\Program Files\WSL\wsl.exe")) { Set-IkukuResume; return }
+        $WSL = "C:\Program Files\WSL\wsl.exe"
+        # Real WSL present. Ensure the Ubuntu distro exists; NUL-strip the listing before matching.
+        $distros = (& $WSL -l -q 2>&1 | Out-String) -replace "`0",""
+        if ($distros -notmatch [regex]::Escape($distroName)) {
+            Write-Host "  Installing $distroName distro..."
+            & $WSL --install -d $distroName --no-launch 2>&1 | Out-Null
+            Start-Sleep 5
+            $distros = (& $WSL -l -q 2>&1 | Out-String) -replace "`0",""
+            if ($distros -notmatch [regex]::Escape($distroName)) { Set-IkukuResume; return }
         }
         @("[wsl2]", "vmIdleTimeout=-1", "memory=12GB", "swap=4GB") | Set-Content "$env:USERPROFILE\.wslconfig"
         Write-Host "  Base distro: $distroName (via $WSL)"
 
-        # 2) Ensure podman + podman-compose in the distro (offline if apt cache present).
-        Write-Host "  Ensuring podman in the base distro..."
-        & $WSL -d $distroName -u root -- bash -c "command -v podman >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq podman podman-compose python3 zstd curl >/dev/null 2>&1); echo podman=`$(command -v podman)"
+        # 2) Ensure podman + podman-compose + the tools apply-layers.sh needs (zstd to
+        #    decompress .tar.zst layers, python3 to parse the manifest). Install any that
+        #    are missing — do NOT gate zstd/python3 behind the podman check (a distro can
+        #    have podman but still lack zstd, which would make apply-layers.sh die).
+        Write-Host "  Ensuring podman + zstd + python3 in the base distro..."
+        & $WSL -d $distroName -u root -- bash -c "need=''; for p in podman podman-compose zstd python3 curl; do b=`$p; [ `$p = podman-compose ] && b=podman-compose; command -v `$b >/dev/null 2>&1 || need=""`$need `$p""; done; if [ -n ""`$need"" ]; then apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq `$need >/dev/null 2>&1; fi; echo ""tools: podman=`$(command -v podman) zstd=`$(command -v zstd) py=`$(command -v python3)"""
 
         # 3) Content-addressed cache for machine-scope layers (app-images, kiro).
         function Resolve-LayerPathB($layer) {

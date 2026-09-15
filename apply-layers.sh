@@ -54,11 +54,19 @@ PY
 )
 [ "${#LAYER_LINES[@]}" -gt 0 ] || die "no layers in manifest"
 
+# Ensure zstd is available (layers are .tar.zst). Self-heal via apt if missing +online.
+ensure_zstd() {
+    command -v zstd >/dev/null 2>&1 && return 0
+    log "zstd missing — attempting apt-get install zstd"
+    apt-get install -y -qq zstd >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq zstd >/dev/null 2>&1; }
+    command -v zstd >/dev/null 2>&1
+}
+
 # decompress a tar[.zst|.gz] to stdout
 cat_tar() {
     local path="$1"
     case "$path" in
-        *.zst) command -v zstd >/dev/null 2>&1 || die "zstd needed for $path"; zstd -dc "$path" ;;
+        *.zst) ensure_zstd || die "zstd needed for $path but could not be installed"; zstd -dc "$path" ;;
         *.gz|*.tgz) gunzip -c "$path" ;;
         *) cat "$path" ;;
     esac
@@ -94,7 +102,12 @@ for line in "${LAYER_LINES[@]}"; do
             verify_digest "$path" "$sha"
             have_podman || die "podman not installed but layer '$id' needs podman-load"
             log "podman load '$id' ($artifact)"
-            cat_tar "$path" | $PODMAN load 2>&1 | sed 's/^/  /' | tail -6
+            # capture pipeline status so a failed load aborts (PIPESTATUS, not the tail's rc)
+            cat_tar "$path" | $PODMAN load > /tmp/ikuku-load.out 2>&1
+            if [ "${PIPESTATUS[0]}" -ne 0 ] || [ "${PIPESTATUS[1]}" -ne 0 ]; then
+                sed 's/^/  /' /tmp/ikuku-load.out >&2; die "podman load failed for $id"
+            fi
+            sed 's/^/  /' /tmp/ikuku-load.out | tail -6
             touch "$marker" ;;
 
         volume-import)
