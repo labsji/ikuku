@@ -61,12 +61,17 @@ if ($LaunchDir -and (Test-Path $LaunchDir)) { $tarSearchDirs += $LaunchDir }
 $tarSearchDirs += $scriptDir
 $tarSearchDirs += (Split-Path $scriptDir)
 $tarSearchDirs = $tarSearchDirs | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
-$wslTar = Get-ChildItem -Path $tarSearchDirs -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1
+# Accept either a .vhdx (preferred - imported with 'wsl --import --vhd', avoids the
+# WSL tar-export/import hang seen on large distros) or a legacy *wsl*.tar. Prefer vhdx.
+$wslTar = Get-ChildItem -Path $tarSearchDirs -Filter "*.vhdx" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $wslTar) { $wslTar = Get-ChildItem -Path $tarSearchDirs -Filter "*wsl*.tar" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+if (-not $wslTar) { $wslTar = Get-ChildItem -Path "$env:USERPROFILE\Downloads" -Filter "*.vhdx" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
 if (-not $wslTar) { $wslTar = Get-ChildItem -Path "$env:USERPROFILE\Downloads" -Filter "*wsl*.tar" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
 if ($wslTar) {
+    $isVhd = $wslTar.Extension -ieq ".vhdx"
     Write-Host ""
     Write-Host "=== Prospect Mode: Importing preconfigured ERPNext ===" -ForegroundColor Green
-    Write-Host "Found: $($wslTar.Name) ($([math]::Round($wslTar.Length / 1GB, 1)) GB)"
+    Write-Host "Found: $($wslTar.Name) ($([math]::Round($wslTar.Length / 1GB, 1)) GB, $(if($isVhd){'vhdx'}else{'tar'}))"
     Set-Content -Path "C:\ikuku\status.txt" -Value "importing"
 
     # Ensure WSL2 is installed (just the kernel, no distro needed). On a pristine
@@ -110,7 +115,12 @@ if ($wslTar) {
         Write-Host "  Replacing existing '$distroName' distro..."
         & $WSL --unregister $distroName 2>&1 | Out-Null
     }
-    & $WSL --import $distroName $installPath $wslTar.FullName
+    if ($isVhd) {
+        # .vhdx import: WSL registers the vhdx directly (fast, reliable - no tar unpack).
+        & $WSL --import $distroName $installPath $wslTar.FullName --vhd
+    } else {
+        & $WSL --import $distroName $installPath $wslTar.FullName
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "WSL import failed. A reboot may be required (VirtualMachinePlatform feature)." -ForegroundColor Yellow
         Write-Host "After reboot, run this installer again - it will resume." -ForegroundColor Yellow
